@@ -23,12 +23,24 @@
 // This part holds the palette and scripts pane for the current sprite (or stage).
 
 package ui.parts {
-	import flash.display.*;
-	import flash.text.*;
+	import flash.display.Bitmap;
+	import flash.display.Graphics;
+	import flash.display.Shape;
+	import flash.display.Sprite;
+	import flash.text.TextField;
+	import flash.text.TextFormat;
 	import flash.utils.getTimer;
-	import scratch.*;
-	import ui.*;
-	import uiwidgets.*;
+	
+	import scratch.ScratchObj;
+	import scratch.ScratchSprite;
+	
+	import ui.BlockPalette;
+	import ui.PaletteSelector;
+	
+	import uiwidgets.IndicatorLight;
+	import uiwidgets.ScriptsPane;
+	import uiwidgets.ScrollFrame;
+	import uiwidgets.ZoomWidget;
 
 public class ScriptsPart extends UIPart {
 
@@ -50,6 +62,13 @@ public class ScriptsPart extends UIPart {
 	private var lastX:int = -10000000; // impossible value to force initial update
 	private var lastY:int = -10000000; // impossible value to force initial update
 
+	// For Game Snap
+	private var showSpriteInfo:Boolean;
+	private var showGlobalSpriteLabel:Boolean;	// Show a label in the Scripts area so we know we're looking at Globals
+	private var globalDisplay:Sprite;
+	private var globalLabel:TextField;
+	private var globalTab:Boolean;
+	
 	public function ScriptsPart(app:Scratch) {
 		this.app = app;
 
@@ -58,6 +77,11 @@ public class ScriptsPart extends UIPart {
 		addXYDisplay();
 		addChild(selector = new PaletteSelector(app));
 
+		// For Game Snap
+		showSpriteInfo = true;
+		globalTab = false;
+		addGlobalSpriteDisplay();
+		
 		var palette:BlockPalette = new BlockPalette();
 		palette.color = CSS.tabColor;
 		paletteFrame = new ScrollFrame();
@@ -76,6 +100,22 @@ public class ScriptsPart extends UIPart {
 		addChild(zoomWidget = new ZoomWidget(scriptsPane));
 	}
 
+	// Game Snap: Set the Global tab as active
+	public function setGlobalTab(inGlobalTab:Boolean):void {
+		globalTab = inGlobalTab;
+		if(globalTab == true) {
+			showSpriteInfo = false;
+		}
+		else {
+			showSpriteInfo = true;
+		}
+	}
+	
+	// Game Snap: Is the Global tab being viewed?
+	public function isViewingGlobalTab():Boolean {
+		return globalTab;
+	}
+	
 	public function resetCategory():void { selector.select(Specs.motionCategory) }
 
 	public function updatePalette():void {
@@ -85,13 +125,18 @@ public class ScriptsPart extends UIPart {
 
 	public function updateSpriteWatermark():void {
 		var target:ScratchObj = app.viewedObj();
-		if (target && !target.isStage) {
+		if (target && !target.isStage && showSpriteInfo == true) { // Added the showSpriteInfo check for Game Snap
 			spriteWatermark.bitmapData = target.currentCostume().thumbnail(40, 40, false);
 		} else {
 			spriteWatermark.bitmapData = null;
 		}
 	}
 
+	// For Game Snap
+	public function clearSpriteWatermark():void {
+		spriteWatermark.bitmapData = null;
+	}
+	
 	public function step():void {
 		// Update the mouse readouts. Do nothing if they are up-to-date (to minimize CPU load).
 		var target:ScratchObj = app.viewedObj();
@@ -101,8 +146,20 @@ public class ScriptsPart extends UIPart {
 		}
 		if (target.isStage) {
 			if (xyDisplay.visible) xyDisplay.visible = false;
+			if (globalDisplay.visible) globalDisplay.visible = false;	// For Game Snap
 		} else {
-			if (!xyDisplay.visible) xyDisplay.visible = true;
+			// Added this section for Game Snap
+			if(showSpriteInfo == true)
+			{
+				// This is the original line of code rather than the IF block
+				if (!xyDisplay.visible) xyDisplay.visible = true;
+				if (globalDisplay.visible) globalDisplay.visible = false;	// For Game Snap
+			}
+			else
+			{
+				if (xyDisplay.visible) xyDisplay.visible = false;
+				if (!globalDisplay.visible) globalDisplay.visible = true;	// For Game Snap
+			}
 
 			var spr:ScratchSprite = target as ScratchSprite;
 			if (!spr) return;
@@ -151,6 +208,10 @@ public class ScriptsPart extends UIPart {
 		xyDisplay.y = spriteWatermark.y + 43;
 		zoomWidget.x = w - zoomWidget.width - 15;
 		zoomWidget.y = h - zoomWidget.height - 15;
+		
+		// For Game Snap
+		globalDisplay.x = w - 90;
+		globalDisplay.y = scriptsFrame.y + 10;
 	}
 
 	private function redraw():void {
@@ -192,4 +253,10 @@ public class ScriptsPart extends UIPart {
 		addChild(xyDisplay);
 	}
 
+	// For Game Snap
+	private function addGlobalSpriteDisplay():void {
+		globalDisplay = new Sprite();
+		globalDisplay.addChild(globalLabel = makeLabel('Global Sprite', readoutLabelFormat, 0, 0));
+		addChild(globalDisplay);
+	}
 }}

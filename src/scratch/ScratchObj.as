@@ -24,25 +24,28 @@
 // containing the variables and methods common to both.
 
 package scratch {
-	import blocks.*;
-
-	import filters.FilterPack;
-
-	import flash.display.*;
+	import flash.display.Bitmap;
+	import flash.display.DisplayObject;
+	import flash.display.Sprite;
 	import flash.events.MouseEvent;
-import flash.geom.ColorTransform;
-import flash.utils.*;
-
-	import interpreter.*;
-
+	import flash.geom.ColorTransform;
+	import flash.utils.getTimer;
+	
+	import blocks.Block;
+	import blocks.BlockIO;
+	
+	import filters.FilterPack;
+	
+	import interpreter.Variable;
+	
 	import scratch.ScratchComment;
-import scratch.ScratchSprite;
-
-import translation.Translator;
-
-	import util.*;
-
-	import watchers.*;
+	import scratch.ScratchSprite;
+	
+	import translation.Translator;
+	
+	import util.JSON;
+	
+	import watchers.ListWatcher;
 
 public class ScratchObj extends Sprite {
 
@@ -65,6 +68,9 @@ public class ScratchObj extends Sprite {
 	public var filterPack:FilterPack;
 	public var isClone:Boolean;
 
+	// For Game Snap
+	public var isGlobalObj:Boolean = false;
+	
 	public var img:Sprite; // holds a bitmap or svg object, after applying image filters, scale, and rotation
 	private var lastCostume:ScratchCostume;
 
@@ -598,6 +604,9 @@ public class ScratchObj extends Sprite {
 		if (sounds.length > 0)		json.writeKeyValue('sounds', sounds);
 		json.writeKeyValue('costumes', costumes);
 		json.writeKeyValue('currentCostumeIndex', currentCostumeIndex);
+		
+		// For Game Snap
+		json.writeKeyValue('isGlobal', isGlobalObj);
 	}
 
 	public function readJSON(jsonObj:Object):void {
@@ -614,6 +623,9 @@ public class ScratchObj extends Sprite {
 		costumes = jsonObj.costumes || [];
 		currentCostumeIndex = jsonObj.currentCostumeIndex;
 		if (isNaNOrInfinity(currentCostumeIndex)) currentCostumeIndex = 0;
+		
+		// For Game Snap
+		isGlobalObj = jsonObj.isGlobal;
 	}
 
 	private function isNaNOrInfinity(n:Number):Boolean {

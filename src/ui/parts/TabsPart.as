@@ -23,9 +23,14 @@
 // This part holds the tab buttons to view scripts, costumes/scenes, or sounds.
 
 package ui.parts {
-	import flash.display.*;
-	import flash.text.*;
+	import flash.display.DisplayObject;
+	import flash.display.Graphics;
+	import flash.display.Sprite;
+	import flash.text.TextField;
+	import flash.text.TextFormat;
+	
 	import translation.Translator;
+	
 	import uiwidgets.IconButton;
 
 public class TabsPart extends UIPart {
@@ -33,24 +38,32 @@ public class TabsPart extends UIPart {
 	private var scriptsTab:IconButton;
 	private var imagesTab:IconButton;
 	private var soundsTab:IconButton;
+	
+	// For Game Snap
+	private var globalTab:IconButton;
+	private var globalTabDisplayObject:DisplayObject;
 
 	public function TabsPart(app:Scratch) {
 		function selectScripts(b:IconButton):void { app.setTab('scripts') }
 		function selectImages(b:IconButton):void { app.setTab('images') }
 		function selectSounds(b:IconButton):void { app.setTab('sounds') }
+		function selectGlobal(b:IconButton):void { app.setTab('global') }
 
 		this.app = app;
 		scriptsTab = makeTab('Scripts', selectScripts);
 		imagesTab = makeTab('Images', selectImages); // changed to 'Costumes' or 'Scenes' by refresh()
 		soundsTab = makeTab('Sounds', selectSounds);
+		globalTab = makeTab('Global', selectGlobal);
 		addChild(scriptsTab);
 		addChild(imagesTab);
 		addChild(soundsTab);
+		globalTabDisplayObject = addChild(globalTab);
+		globalTabDisplayObject.visible = false;
 		scriptsTab.turnOn();
 	}
 
 	public static function strings():Array {
-		return ['Scripts', 'Costumes', 'Backdrops', 'Sounds'];
+		return ['Scripts', 'Costumes', 'Backdrops', 'Sounds', 'Global'];
 	}
 
 	public function refresh():void {
@@ -63,9 +76,11 @@ public class TabsPart extends UIPart {
 		scriptsTab.turnOff();
 		imagesTab.turnOff();
 		soundsTab.turnOff();
+		globalTab.turnOff();
 		if (tabName == 'scripts') scriptsTab.turnOn();
 		if (tabName == 'images') imagesTab.turnOn();
 		if (tabName == 'sounds') soundsTab.turnOn();
+		if (tabName == 'global') globalTab.turnOn();
 	}
 
 	public function fixLayout():void {
@@ -75,13 +90,16 @@ public class TabsPart extends UIPart {
 		imagesTab.y = 0;
 		soundsTab.x = imagesTab.x + imagesTab.width + 1;
 		soundsTab.y = 0;
-		this.w = soundsTab.x + soundsTab.width;
+		globalTab.x = soundsTab.x + soundsTab.width + 1;
+		globalTab.y = 0;
+		this.w = globalTab.x + globalTab.width; // Original code: soundsTab.x + soundsTab.width;
 		this.h = scriptsTab.height;
 	}
 
 	public function updateTranslation():void {
 		scriptsTab.setImage(makeTabImg('Scripts', true), makeTabImg('Scripts', false));
 		soundsTab.setImage(makeTabImg('Sounds', true), makeTabImg('Sounds', false));
+		globalTab.setImage(makeTabImg('Global', true), makeTabImg('Global', false));
 		refresh(); // updates imagesTabs
 	}
 
@@ -109,4 +127,8 @@ public class TabsPart extends UIPart {
 		return img;
 	}
 
+	// For Game Snap
+	public function toggleGlobalTab():void {
+		globalTabDisplayObject.visible = !globalTabDisplayObject.visible;
+	}
 }}

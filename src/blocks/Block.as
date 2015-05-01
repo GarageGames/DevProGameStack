@@ -31,19 +31,33 @@
 // sequence from a specification string (e.g. "%n + %n") and type (e.g. reporter).
 
 package blocks {
+import flash.display.DisplayObject;
+import flash.display.DisplayObjectContainer;
+import flash.display.Sprite;
+import flash.events.FocusEvent;
+import flash.events.MouseEvent;
+import flash.filters.GlowFilter;
+import flash.geom.Point;
+import flash.net.URLLoader;
+import flash.text.AntiAliasType;
+import flash.text.TextField;
+import flash.text.TextFieldAutoSize;
+import flash.text.TextFormat;
+import flash.text.TextLineMetrics;
+
+import assets.Resources;
+
 import extensions.ExtensionManager;
 
-import flash.display.*;
-	import flash.events.*;
-	import flash.filters.GlowFilter;
-	import flash.geom.*;
-	import flash.net.URLLoader;
-	import flash.text.*;
-	import assets.Resources;
-	import translation.Translator;
-	import util.*;
-	import uiwidgets.*;
-	import scratch.*;
+import scratch.ScratchComment;
+import scratch.ScratchStage;
+
+import translation.Translator;
+
+import uiwidgets.DialogBox;
+import uiwidgets.ScriptsPane;
+
+import util.ReadStream;
 
 public class Block extends Sprite {
 
@@ -105,6 +119,9 @@ public class Block extends Sprite {
 
 	private var originalParent:DisplayObjectContainer, originalRole:int, originalIndex:int, originalPosition:Point;
 
+	// For Game Snap
+	public var isGlobal:Boolean = false;
+	
 	public function Block(spec:String, type:String = " ", color:int = 0xD00000, op:* = 0, defaultArgs:Array = null) {
 		this.spec = Translator.map(spec);
 		this.type = type;
@@ -539,6 +556,10 @@ public class Block extends Sprite {
 		dup.parameterNames = parameterNames;
 		dup.defaultArgValues = defaultArgValues;
 		dup.warpProcFlag = warpProcFlag;
+		
+		// For Game Snap
+		dup.isGlobal = isGlobal;
+		
 		if (forClone) {
 			dup.copyArgsForClone(args);
 		} else {

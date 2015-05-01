@@ -27,6 +27,7 @@
 
 package {
 	import flash.display.Bitmap;
+	
 	import assets.Resources;
 
 public class Specs {
@@ -47,14 +48,16 @@ public class Specs {
 	public static const dataCategory:int = 9;
 	public static const myBlocksCategory:int = 10;
 	public static const listCategory:int = 12;
+	public static const focusAreaCategory:int = 13;
 	public static const extensionsCategory:int = 20;
 
 	public static var variableColor:int = 0xEE7D16; // Scratch 1.4: 0xF3761D
 	public static var listColor:int = 0xCC5B22; // Scratch 1.4: 0xD94D11
 	public static var procedureColor:int = 0x632D99; // 0x531E99;
 	public static var parameterColor:int = 0x5947B1;
+	public static var focusAreaColor:int = 0x000;
 	public static var extensionsColor:int = 0x4B4A60; // 0x72228C; // 0x672D79;
-
+	
 	private static const undefinedColor:int = 0xD42828;
 
 	public static const categories:Array = [
@@ -72,6 +75,7 @@ public class Specs {
 		[10, "More Blocks",	procedureColor],
 		[11, "Parameter",	parameterColor],
 		[12, "List",		listColor],
+		[13, "Focus Area",	focusAreaColor],
 		[20, "Extension",	extensionsColor],
 	];
 
@@ -359,6 +363,9 @@ public class Specs {
 		["-"],
 		["show list %m.list",								" ", 12, "showList:"],
 		["hide list %m.list",								" ", 12, "hideList:"],
+		
+		// DevPro blocks
+		["Focus Area %n",						"c", 13, "focusArea", 1],
 
 		// obsolete blocks from Scratch 1.4 that may be used in older projects
 		["play drum %n for %n beats",			" ", 98, "drum:duration:elapsed:from:", 1, 0.25], // Scratch 1.4 MIDI drum

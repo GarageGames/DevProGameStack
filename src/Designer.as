@@ -4,7 +4,9 @@
 
 package {
 	import flash.desktop.NativeApplication;
-	import flash.events.*;
+	import flash.events.Event;
+	import flash.events.IOErrorEvent;
+	import flash.events.InvokeEvent;
 	import flash.filesystem.File;
 	import flash.filesystem.FileMode;
 	import flash.filesystem.FileStream;
@@ -14,6 +16,10 @@ package {
 	import flash.text.TextFormat;
 	import flash.utils.ByteArray;
 	
+	import scratch.ScratchObj;
+	
+	import ui.parts.GlobalTabPart;
+	
 	import uiwidgets.DialogBox;
 	import uiwidgets.Menu;
 	
@@ -22,6 +28,10 @@ package {
 public class Designer extends Scratch {
 	public static var dapp:Designer; // static reference to the app, used for debugging
 	
+	protected var lastViewedObject:ScratchObj = null;
+	
+	protected var globalTabPart:GlobalTabPart;
+
 	protected var displayFPSCounter:Boolean = false;	// Tracks displaying the FPS counter
 	
 	public var projectPath:String = '';				// The OS path to the save file, including name
@@ -103,6 +113,10 @@ public class Designer extends Scratch {
 		if (b.lastEvent.shiftKey) {
 			m.addLine();
 			m.addItem('Toggle FPS Counter', toggleFPSCounter);
+
+			m.addItem('Toggle Focus Area blocks', toggleFocusAreaBlocks);
+			
+			m.addItem('Toggle Global Tab', toggleGlobalTab);
 		}
 	}
 
@@ -115,11 +129,25 @@ public class Designer extends Scratch {
 			addFrameRateReadout(10, 29);
 		}
 	}
+	
+	protected function toggleFocusAreaBlocks():void {
+		if (app.canAddFocusAreaBlocks) {
+			app.canAddFocusAreaBlocks = false;
+		} else {
+			app.canAddFocusAreaBlocks = true;
+		}
+		
+		Scratch.app.translationChanged();
+	}
+	
+	protected function toggleGlobalTab():void {
+		tabsPart.toggleGlobalTab();
+	}
 
 	override public function showAboutMenu(b:*):void {
 		// Just display a dialog
 		DialogBox.notify(
-			'DevPro Game Snap',
+			'DevPro Game Snap v0.0.3',
 			'\nCopyright © 2015 GarageGames LLC' +
 			'\n\nBased on Scratch from the MIT Media Laboratory' +
 			'\nunder the GPL 2 license.', stage);
@@ -249,6 +277,96 @@ public class Designer extends Scratch {
 			stage);
 	}
 	
+	// Override the Scratch.as version
+	override protected function addParts():void {
+		super.addParts();
+		
+		//globalTabPart = new GlobalTabPart(this);
+		
+	}
+	
+	// Copied from Scratch.as
+	override public function selectSprite(obj:ScratchObj):void {
+		if (isShowing(imagesPart)) imagesPart.editor.shutdown();
+		if (isShowing(soundsPart)) soundsPart.editor.shutdown();
+		viewedObject = obj;
+		libraryPart.refresh();
+		tabsPart.refresh();
+		if (isShowing(imagesPart)) {
+			imagesPart.refresh();
+		}
+		if (isShowing(soundsPart)) {
+			soundsPart.currentIndex = 0;
+			soundsPart.refresh();
+		}
+		if (isShowing(scriptsPart)) {
+			if(scriptsPart.isViewingGlobalTab()) {
+				// Force a change to the Scripts tabs when switching sprites
+				setTab("scripts");
+			}
+			else {
+				scriptsPart.updatePalette();
+				scriptsPane.viewScriptsFor(obj);
+				scriptsPart.updateSpriteWatermark();
+			}
+		}
+	}
+
+	// Copied from Scratch.as
+	override public function setTab(tabName:String):void {
+		if (isShowing(imagesPart)) imagesPart.editor.shutdown();
+		if (isShowing(soundsPart)) soundsPart.editor.shutdown();
+		hide(scriptsPart);
+		hide(imagesPart);
+		hide(soundsPart);
+		//hide(globalTabPart);
+		if (!editMode) return;
+		if (tabName == 'images') {
+			show(imagesPart);
+			imagesPart.refresh();
+		} else if (tabName == 'sounds') {
+			soundsPart.refresh();
+			show(soundsPart);
+		} else if (tabName == 'global') {
+			scriptsPart.setGlobalTab(true);
+			
+			if(viewedObject != stagePane.globalObjSprite()) {
+				lastViewedObject = viewedObject;
+			}
+			
+			viewedObject = stagePane.globalObjSprite();// Try and present only the global sprite
+			libraryPart.refresh();
+			tabsPart.refresh();
+			
+			scriptsPart.updatePalette();
+			scriptsPane.viewScriptsFor(viewedObject);
+			//scriptsPart.updateSpriteWatermark();
+			scriptsPart.clearSpriteWatermark();
+			show(scriptsPart);
+		} else if (tabName && (tabName.length > 0)) {
+			tabName = 'scripts';
+			scriptsPart.setGlobalTab(false);
+			
+			// Do we need to switchto the last viewed object?
+			if(viewedObject == stagePane.globalObjSprite() && lastViewedObject != null) {
+				viewedObject = lastViewedObject;
+				lastViewedObject = null;
+				libraryPart.refresh();
+				tabsPart.refresh();
+			}
+			
+			scriptsPart.updatePalette();
+			scriptsPane.viewScriptsFor(viewedObject);
+			scriptsPart.updateSpriteWatermark();
+			show(scriptsPart);
+		}
+		show(tabsPart);
+		show(stagePart); // put stage in front
+		tabsPart.selectTab(tabName);
+		lastTab = tabName;
+		if (saveNeeded) setSaveNeeded(true); // save project when switching tabs, if needed (but NOT while loading!)
+	}
+
 	// Get the project's native file path (including file name)
 	public function getProjectPath():String {
 		return projectPath;

@@ -23,23 +23,41 @@
 // A Scratch stage object. Supports a drawing surface for the pen commands.
 
 package scratch {
-import flash.display.*;
-import flash.geom.*;
-import flash.media.*;
-import flash.events.*;
+import flash.display.Bitmap;
+import flash.display.BitmapData;
+import flash.display.DisplayObject;
+import flash.display.Shape;
+import flash.display.Sprite;
+import flash.events.MouseEvent;
+import flash.geom.ColorTransform;
+import flash.geom.Matrix;
+import flash.geom.Point;
+import flash.geom.Rectangle;
+import flash.media.Camera;
+import flash.media.Video;
+import flash.net.FileReference;
 import flash.system.Capabilities;
 import flash.utils.ByteArray;
-import flash.net.FileReference;
+
 import blocks.Block;
-import filters.FilterPack;
-import translation.Translator;
-import uiwidgets.Menu;
-import ui.media.MediaInfo;
-import util.*;
-import watchers.*;
+
+import by.blooddy.crypto.MD5;
 import by.blooddy.crypto.image.PNG24Encoder;
 import by.blooddy.crypto.image.PNGFilter;
-import by.blooddy.crypto.MD5;
+
+import filters.FilterPack;
+
+import translation.Translator;
+
+import ui.media.MediaInfo;
+
+import uiwidgets.Menu;
+
+import util.JSON;
+import util.ProjectIO;
+
+import watchers.ListWatcher;
+import watchers.Watcher;
 
 public class ScratchStage extends ScratchObj {
 
@@ -169,6 +187,7 @@ public class ScratchStage extends ScratchObj {
 		// Return an array of all sprites in this project plus the stage.
 		var result:Array = sprites();
 		result.push(this);
+		result = result.concat(globalObjs());	// Add all global objects for Game Snap
 		return result;
 	}
 
@@ -177,9 +196,32 @@ public class ScratchStage extends ScratchObj {
 		var result:Array = [];
 		for (var i:int = 0; i < numChildren; i++) {
 			var o:* = getChildAt(i);
-			if ((o is ScratchSprite) && !o.isClone) result.push(o);
+			if ((o is ScratchSprite) && !o.isClone && !o.isGlobalObj) result.push(o);	// Added isGlobalObj check for Game Snap
 		}
 		return result;
+	}
+
+	// Returns list of all global objects (for Game Snap)
+	public function globalObjs():Array {
+		var result:Array = [];
+		for (var i:int = 0; i < numChildren; i++) {
+			var o:* = getChildAt(i);
+			if ((o is ScratchSprite) && !o.isClone && o.isGlobalObj) result.push(o);
+		}
+		return result;
+	}
+	
+	// Returns the global sprite (for Game Snap)
+	public function globalObjSprite():ScratchSprite {
+		for (var i:int = 0; i < numChildren; i++) {
+			var o:* = getChildAt(i);
+			if (o is ScratchSprite) {
+				if(!o.isClone && o.isGlobalObj) {
+					return o;
+				}
+			}
+		}
+		return null;
 	}
 
 	public function deleteClones():void {
@@ -738,7 +780,9 @@ public class ScratchStage extends ScratchObj {
 			return true;
 		}
 		Scratch.app.setSaveNeeded();
-		if ((obj is MediaInfo) && obj.fromBackpack) {
+		// Game Snap change: if() originally included "&& obj.fromBackpack" but this property doesn't exist in MediaInfo or elsewhere.
+		// Looks like this method has changed significantly in later versions of Scratch
+		if ((obj is MediaInfo)) { // && obj.fromBackpack) {
 			function addSpriteForCostume(c:ScratchCostume):void {
 				var s:ScratchSprite = new ScratchSprite(c.costumeName);
 				s.setInitialCostume(c.duplicate());
@@ -775,9 +819,16 @@ public class ScratchStage extends ScratchObj {
 	public override function writeJSON(json:util.JSON):void {
 		super.writeJSON(json);
 		var children:Array = [];
+		
+		// For Game Snap, write out any global sprite first
+		var gs:ScratchSprite = globalObjSprite();
+		if(gs) {
+			children.push(gs);
+		}
+		
 		for (var i:int = 0; i < numChildren; i++) {
 			var c:DisplayObject = getChildAt(i);
-			if (((c is ScratchSprite) && !ScratchSprite(c).isClone)
+			if (((c is ScratchSprite) && !ScratchSprite(c).isClone && !ScratchSprite(c).isGlobalObj)	// Added isGlobal for Game Snap
 				|| (c is Watcher) || (c is ListWatcher)) {
 				children.push(c);
 			}
@@ -795,6 +846,9 @@ public class ScratchStage extends ScratchObj {
 			}
 		}
 
+		// For Game Snap
+		json.writeKeyValue('gameSnapFileVersion', Scratch.gameSnapFileVersion);
+		
 		json.writeKeyValue('penLayerMD5', penLayerMD5);
 		json.writeKeyValue('penLayerID', penLayerID);
 		json.writeKeyValue('tempoBPM', tempoBPM);
@@ -813,6 +867,9 @@ public class ScratchStage extends ScratchObj {
 		if (jsonObj.videoAlpha) videoAlpha = jsonObj.videoAlpha;
 		children = jsonObj.children;
 		info = jsonObj.info;
+
+		// For Game Snap
+		Scratch.app.gameSnapLastReadFileVersion = jsonObj.gameSnapFileVersion;
 
 		// instantiate sprites and record their names
 		var spriteNameMap:Object = new Object();
@@ -851,6 +908,26 @@ public class ScratchStage extends ScratchObj {
 		// instantiate lists, variables, scripts, costumes, and sounds
 		for each (var scratchObj:ScratchObj in allObjects()) {
 			scratchObj.instantiateFromJSON(this);
+		}
+		
+		// For Game Snap: Create a global sprite if one doesn't exist
+		var gs:ScratchSprite = globalObjSprite();
+		if(!gs) {
+			for (i = 0; i < children.length; i++) {
+				var ss:ScratchSprite = children[i] as ScratchSprite;
+				if(ss && ss.isGlobalObj) {
+					gs = ss;
+					break;
+				}
+			}
+			if(!gs) {
+				// Create a new global sprite
+				gs = new ScratchSprite();
+				gs.objName = "GlobalSprite";
+				gs.isGlobalObj = true;
+				spriteNameMap[gs.objName] = gs;
+				addChild(gs);
+			}
 		}
 	}
 

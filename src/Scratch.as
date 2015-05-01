@@ -71,6 +71,11 @@ public class Scratch extends Sprite {
 	public var render3D:IRenderIn3D;
 	public var isArmCPU:Boolean;
 	public var jsEnabled:Boolean = false; // true when the SWF can talk to the webpage
+	
+	// For Game Snap
+	public static const gameSnapFileVersion:int = 1;	// The current Game Snap file version
+	public var gameSnapLastReadFileVersion:int = 0;		// The last read Game Snap file version
+	public var canAddFocusAreaBlocks:Boolean = false;	// Determines whether Focus Area blocks can be added from the More Blocks category
 
 	// Runtime
 	public var runtime:ScratchRuntime;
@@ -87,8 +92,8 @@ public class Scratch extends Sprite {
 	public var debugOpCmd:String = '';
 
 	protected var autostart:Boolean;
-	private var viewedObject:ScratchObj;
-	private var lastTab:String = 'scripts';
+	protected var viewedObject:ScratchObj;
+	protected var lastTab:String = 'scripts';
 	protected var wasEdited:Boolean; // true if the project was edited and autosaved
 	private var _usesUserNameBlock:Boolean = false;
 	protected var languageChanged:Boolean; // set when language changed
@@ -106,7 +111,7 @@ public class Scratch extends Sprite {
 	public var libraryPart:LibraryPart;
 	protected var topBarPart:TopBarPart;
 	protected var stagePart:StagePart;
-	private var tabsPart:TabsPart;
+	protected var tabsPart:TabsPart;
 	protected var scriptsPart:ScriptsPart;
 	public var imagesPart:ImagesPart;
 	public var soundsPart:SoundsPart;

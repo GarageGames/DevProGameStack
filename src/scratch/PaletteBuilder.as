@@ -24,18 +24,33 @@
 // category, including the blocks, buttons, and watcher toggle boxes.
 
 package scratch {
-	import flash.display.*;
-	import flash.events.MouseEvent;
+	import flash.display.DisplayObject;
+	import flash.display.Graphics;
+	import flash.display.Shape;
 	import flash.events.Event;
-	import flash.net.*;
-	import flash.text.*;
-	import blocks.*;
-	import extensions.*;
-	import ui.media.MediaLibrary;
-	import ui.ProcedureSpecEditor;
-	import ui.parts.UIPart;
-	import uiwidgets.*;
+	import flash.events.MouseEvent;
+	import flash.net.URLRequest;
+	import flash.net.navigateToURL;
+	import flash.text.TextField;
+	import flash.text.TextFieldAutoSize;
+	
+	import blocks.Block;
+	import blocks.BlockArg;
+	
+	import extensions.ScratchExtension;
+	
 	import translation.Translator;
+	
+	import ui.ProcedureSpecEditor;
+	import ui.media.MediaLibrary;
+	import ui.parts.UIPart;
+	
+	import uiwidgets.Button;
+	import uiwidgets.DialogBox;
+	import uiwidgets.IconButton;
+	import uiwidgets.IndicatorLight;
+	import uiwidgets.Menu;
+	import uiwidgets.VariableSettings;
 
 public class PaletteBuilder {
 
@@ -121,7 +136,25 @@ public class PaletteBuilder {
 	private function showMyBlocksPalette(shiftKey:Boolean):void {
 		// show creation button, hat, and call blocks
 		var catColor:int = Specs.blockColor(Specs.procedureColor);
+
+		// For Game Snap, focus area blocks
+		if (app.canAddFocusAreaBlocks) {
+			addBlocksForCategory(Specs.focusAreaCategory, Specs.focusAreaColor);
+		}
+
+		// For Game Snap, added this label to separate this section from the global section below
+		var localBlocksLabel:TextField = makeLabel("Local Custom Blocks ");
+		if(app.viewedObj() == app.stagePane.globalObjSprite()) {
+			localBlocksLabel = makeLabel("Global Custom Blocks ");
+		}
+		localBlocksLabel.x = 5;
+		localBlocksLabel.y = nextY;
+		app.palette.addChild(localBlocksLabel);
+		addLine(localBlocksLabel.x + localBlocksLabel.width, nextY + (localBlocksLabel.height / 2), pwidth - x - 38 - localBlocksLabel.width);
+		nextY += localBlocksLabel.height + 9;
+
 		addItem(new Button(Translator.map('Make a Block'), makeNewBlock, false, '/help/studio/tips/blocks/make-a-block/'));
+		
 		var definitions:Array = app.viewedObj().procedureDefinitions();
 		if (definitions.length > 0) {
 			nextY += 5;
@@ -132,6 +165,33 @@ public class PaletteBuilder {
 			nextY += 5;
 		}
 
+		// For Game Snap, add global blocks here
+		if(app.stagePane.globalObjSprite() && app.viewedObj() != app.stagePane.globalObjSprite()) {
+			// Add the global block definitions.
+			var x:int = 5;
+			nextY += 9;
+			
+			var globalBlockLabel:TextField = makeLabel("Global Custom Blocks ");
+			globalBlockLabel.x = x;
+			globalBlockLabel.y = nextY;
+			app.palette.addChild(globalBlockLabel);
+			
+			addLine(globalBlockLabel.x + globalBlockLabel.width, nextY + (globalBlockLabel.height / 2), pwidth - x - 38 - globalBlockLabel.width);
+			
+			nextY += globalBlockLabel.height + 9;
+			
+			definitions = app.stagePane.globalObjSprite().procedureDefinitions();
+			if (definitions.length > 0) {
+				nextY += 5;
+				for each (proc in definitions) {
+					b = new Block(proc.spec, ' ', Specs.procedureColor, Specs.CALL, proc.defaultArgValues);
+					b.isGlobal = true;
+					addItem(b);
+				}
+				nextY += 5;
+			}
+		}
+		
 		addExtensionButtons();
 		for each (var ext:* in app.extensionManager.enabledExtensions()) {
 			addExtensionSeparator(ext);
@@ -242,6 +302,12 @@ public class PaletteBuilder {
 			newHat.setSpec(spec);
 			newHat.x = 10 - app.scriptsPane.x + Math.random() * 100;
 			newHat.y = 10 - app.scriptsPane.y + Math.random() * 100;
+			
+			// For Game Snap
+			if(app.viewedObj().isGlobalObj) {
+				newHat.isGlobal = true;
+			}
+			
 			app.scriptsPane.addChild(newHat);
 			app.scriptsPane.saveScripts();
 			app.runtime.updateCalls();

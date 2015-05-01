@@ -56,13 +56,20 @@
 // Delay times are rounded to milliseconds, and the minimum delay is a millisecond.
 
 package interpreter {
+	import flash.geom.Point;
 	import flash.utils.Dictionary;
 	import flash.utils.getTimer;
-	import flash.geom.Point;
-	import blocks.*;
-	import primitives.*;
-	import scratch.*;
-	import sound.*;
+	
+	import blocks.Block;
+	import blocks.BlockArg;
+	
+	import primitives.Primitives;
+	
+	import scratch.ScratchObj;
+	import scratch.ScratchSprite;
+	import scratch.ScratchStage;
+	
+	import sound.ScratchSoundPlayer;
 
 public class Interpreter {
 
@@ -451,6 +458,7 @@ public class Interpreter {
 		primTable["stopAll"]			= function(b:*):* { app.runtime.stopAll(); yield = true; };
 		primTable["stopScripts"]		= primStop;
 		primTable["warpSpeed"]			= primOldWarpSpeed;
+		primTable["focusArea"]			= function(b:*):* { startCmdList(b.subStack1); };
 
 		// procedures
 		primTable[Specs.CALL]			= primCall;
@@ -636,11 +644,28 @@ public class Interpreter {
 		// Lookup the procedure and cache for future use
 		var obj:ScratchObj = activeThread.target;
 		var spec:String = b.spec;
-		var proc:Block = obj.procCache[spec];
-		if (!proc) {
-			proc = obj.lookupProcedure(spec);
-			obj.procCache[spec] = proc;
+		
+		// Modified code for Game Snap
+		var proc:Block = null;
+		if(!b.isGlobal) {
+			// Not a global block
+			proc = obj.procCache[spec];
+			if (!proc) {
+				proc = obj.lookupProcedure(spec);
+				obj.procCache[spec] = proc;
+			}
 		}
+		else {
+			// Is a global block
+			var gObj:ScratchObj = app.stagePane.globalObjSprite();
+			if(gObj) {
+				proc = gObj.procCache[spec];
+				if(!proc) {
+					proc = gObj.lookupProcedure(spec);
+				}
+			}
+		}
+		
 		if (!proc) return;
 
 		if (warpThread) {

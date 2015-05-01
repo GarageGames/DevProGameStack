@@ -70,8 +70,8 @@ public class BlockIO {
 		if (b.op == Specs.GET_LIST) return [Specs.GET_LIST, b.spec];	// list reporter
 		if (b.op == Specs.GET_PARAM) return [Specs.GET_PARAM, b.spec, b.type]; // parameter reporter
 		if (b.op == Specs.PROCEDURE_DEF)								// procedure definition
-			return [Specs.PROCEDURE_DEF, b.spec, b.parameterNames, b.defaultArgValues, b.warpProcFlag];
-		if (b.op == Specs.CALL) result = [Specs.CALL, b.spec];			// procedure call - arguments follow spec
+			return [Specs.PROCEDURE_DEF, b.spec, b.parameterNames, b.defaultArgValues, b.warpProcFlag, b.isGlobal];		// For Game Snap, isGlobal added with file version 1
+		if (b.op == Specs.CALL) result = [Specs.CALL, b.isGlobal, b.spec];			// procedure call - arguments follow spec.  For Game Snap, isGlobal added with file version 1
 		for each (var a:* in b.normalizedArgs()) {
 			// Note: arguments are always saved in normalized (i.e. left-to-right) order
 			if (a is Block) result.push(blockToArray(a));
@@ -102,8 +102,18 @@ public class BlockIO {
 		if (b) { b.fixArgLayout(); return b }
 
 		if (cmd[0] == Specs.CALL) {
-			b = new Block(cmd[1], '', Specs.procedureColor, Specs.CALL);
-			cmd.splice(0, 1);
+			// Modified for Game Snap
+			if(Scratch.app.gameSnapLastReadFileVersion >= 1) {
+				// Read in the block while taking into account the isGlobal property
+				b = new Block(cmd[2], '', Specs.procedureColor, Specs.CALL);
+				b.isGlobal = cmd[1];
+				cmd.splice(0, 2);
+			}
+			else {
+				// This is the original code that was here.  It allows for reading of non-Game Snap files
+				b = new Block(cmd[1], '', Specs.procedureColor, Specs.CALL);
+				cmd.splice(0, 1);
+			}
 		} else {
 			var spec:Array = specForCmd(cmd, undefinedBlockType);
 			var label:String = spec[0];
@@ -192,6 +202,12 @@ public class BlockIO {
 			b.parameterNames = cmd[2];
 			b.defaultArgValues = cmd[3];
 			if (cmd.length > 4) b.warpProcFlag = cmd[4];
+			
+			// For Game Snap
+			if(Scratch.app.gameSnapLastReadFileVersion >=1 ) {
+				b.isGlobal = cmd[5]; // Defined in blockToArray()
+			}
+			
 			b.setSpec(cmd[1]);
 			b.fixArgLayout();
 			return b;
