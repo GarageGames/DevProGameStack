@@ -469,6 +469,9 @@ public class Interpreter {
 		primTable[Specs.CHANGE_VAR]		= primVarChange;
 		primTable[Specs.GET_PARAM]		= primGetParam;
 
+		// variables by string for Game Snap
+		primTable["readVariableString:"]	= primVarGetByString;
+		
 		// edge-trigger hat blocks
 		primTable["whenDistanceLessThan"]	= primNoop;
 		primTable["whenSensorConnected"]	= primNoop;
@@ -652,7 +655,14 @@ public class Interpreter {
 			proc = obj.procCache[spec];
 			if (!proc) {
 				proc = obj.lookupProcedure(spec);
-				obj.procCache[spec] = proc;
+				if(proc || !obj.basedOnTemplateObj) {
+					obj.procCache[spec] = proc;					
+				}
+				else {
+					// Look up the procedure on the template object 
+					proc = obj.basedOnTemplateObj.lookupProcedure(spec);
+					obj.procCache[spec] = proc;
+				}
 			}
 		}
 		else {
@@ -705,6 +715,19 @@ public class Interpreter {
 		var v:Variable = activeThread.target.varCache[b.spec];
 		if (v == null) {
 			v = activeThread.target.varCache[b.spec] = activeThread.target.lookupOrCreateVar(b.spec);
+			if (v == null) return 0;
+		}
+		// XXX: Do we need a get() for persistent variables here ?
+		return v.value;
+	}
+	
+	// Get variable by string for Game Snap
+	private function primVarGetByString(b:Block):* {
+		var name:String = arg(b, 0);
+		if(!name) return 0;
+		var v:Variable = activeThread.target.varCache[name];
+		if (v == null) {
+			v = activeThread.target.varCache[name] = activeThread.target.lookupOrCreateVar(name);
 			if (v == null) return 0;
 		}
 		// XXX: Do we need a get() for persistent variables here ?

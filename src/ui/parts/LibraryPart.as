@@ -67,6 +67,12 @@ public class LibraryPart extends UIPart {
 	private var videoLabel:TextField;
 	private var videoButton:IconButton;
 
+	// For Game Snap
+	private var showSpriteTemplateTabs:Boolean = false;
+	private var showTemplateSprites:Boolean = false;
+	private var spritesTab:IconButton;
+	private var templatesTab:IconButton;
+
 	public function LibraryPart(app:Scratch) {
 		this.app = app;
 		shape = new Shape();
@@ -81,6 +87,17 @@ public class LibraryPart extends UIPart {
 		addChild(importButton = makeButton(spriteFromComputer, 'import'));
 		addChild(photoButton = makeButton(spriteFromCamera, 'camera'));
 
+		// For Game Snap
+		function selectSprites(b:IconButton):void { selectTab('sprites') }
+		function selectTemplates(b:IconButton):void { selectTab('templates') }
+		spritesTab = makeTab('Sprites', selectSprites);
+		templatesTab = makeTab('Templates', selectTemplates);
+		addChild(spritesTab);
+		addChild(templatesTab);
+		spritesTab.turnOn();
+		spritesTab.visible = false;
+		templatesTab.visible = false;
+		
 		addStageArea();
 		addNewBackdropButtons();
 		addVideoControl();
@@ -91,7 +108,7 @@ public class LibraryPart extends UIPart {
 		spriteDetails.visible = false;
 
 		updateTranslation();
-	}
+}
 
 	public static function strings():Array {
 		return [
@@ -157,6 +174,20 @@ public class LibraryPart extends UIPart {
 		newSpriteLabel.x = libraryButton.x - newSpriteLabel.width - 6;
 		newSpriteLabel.y = 6;
 
+		// For Game Snap
+		if(!showSpriteTemplateTabs && spritesTab.visible) {
+			spritesTab.visible = false;
+			templatesTab.visible = false;
+		}
+		else if(showSpriteTemplateTabs && !spritesTab.visible) {
+			spritesTab.visible = true;
+			templatesTab.visible = true;
+			spritesTab.x = stageAreaWidth + 10;
+			spritesTab.y = 3;
+			templatesTab.x = spritesTab.x + spritesTab.width + 1;
+			templatesTab.y = spritesTab.y;
+		}
+		
 		stageThumbnail.x = 2;
 		stageThumbnail.y = CSS.titleBarH + 2;
 
@@ -188,7 +219,16 @@ public class LibraryPart extends UIPart {
 		if (spriteDetails.visible) spriteDetails.refresh();
 		stageThumbnail.setTarget(app.stageObj());
 		spritesPane.clear(false);
-		var sortedSprites:Array = app.stageObj().sprites();
+		
+		// Modified for Game Snap.  Was originally calling the sprites() method on the stage.
+		// Now we call the appropriate method based on templates being shown or not.
+		var sortedSprites:Array;
+		if(!showSpriteTemplateTabs || !showTemplateSprites) {
+			sortedSprites = app.stageObj().regularSprites();
+		}
+		else {
+			sortedSprites = app.stageObj().templateSprites();
+		}
 		sortedSprites.sort(
 			function(spr1:ScratchSprite, spr2:ScratchSprite):int {
 				return spr1.indexInLibrary - spr2.indexInLibrary
@@ -333,6 +373,12 @@ public class LibraryPart extends UIPart {
 
 	private function paintSprite(b:IconButton):void {
 		var spr:ScratchSprite = new ScratchSprite();
+		
+		// For Game Snap
+		if(showTemplateSprites) {
+			spr.setupAsTemplateObj();
+		}
+		
 		spr.setInitialCostume(ScratchCostume.emptyBitmapCostume(Translator.map('costume1'), false));
 		app.addNewSprite(spr, true);
 	}
@@ -340,6 +386,12 @@ public class LibraryPart extends UIPart {
 	private function spriteFromCamera(b:IconButton):void {
 		function savePhoto(photo:BitmapData):void {
 			var s:ScratchSprite = new ScratchSprite();
+			
+			// For Game Snap
+			if(showTemplateSprites) {
+				s.setupAsTemplateObj();
+			}
+
 			s.setInitialCostume(new ScratchCostume(Translator.map('photo1'), photo));
 			app.addNewSprite(s);
 			app.closeCameraDialog();
@@ -357,11 +409,22 @@ public class LibraryPart extends UIPart {
 			if (c) {
 				spr = new ScratchSprite(c.costumeName);
 				spr.setInitialCostume(c);
+
+				// For Game Snap
+				if(showTemplateSprites) {
+					spr.setupAsTemplateObj();
+				}
+				
 				app.addNewSprite(spr);
 				return;
 			}
 			spr = costumeOrSprite as ScratchSprite;
 			if (spr) {
+				// For Game Snap
+				if(showTemplateSprites) {
+					spr.setupAsTemplateObj();
+				}
+				
 				app.addNewSprite(spr);
 				return;
 			}
@@ -373,6 +436,12 @@ public class LibraryPart extends UIPart {
 				for each (c in list) spr.costumes.push(c);
 				if (spr.costumes.length > 1) spr.costumes.shift(); // remove default costume
 				spr.showCostumeNamed(list[0].costumeName);
+				
+				// For Game Snap
+				if(showTemplateSprites) {
+					spr.setupAsTemplateObj();
+				}
+				
 				app.addNewSprite(spr);
 			}
 		}
@@ -475,6 +544,71 @@ public class LibraryPart extends UIPart {
 			result.push(spritesPane.getChildAt(i));
 		}
 		return result;
+	}
+	
+	// -----------------------------
+	// Game Snap Sprites/Templates tabs
+	//------------------------------
+	
+	public function toggleSpriteTemplateTabs():void {
+		setSpriteTemplateTabs(!showSpriteTemplateTabs);
+	}
+	
+	public function setSpriteTemplateTabs(show:Boolean):void {
+		if(show) {
+			showSpriteTemplateTabs = true;
+			fixLayout();
+			showSpriteDetails(false);
+			selectTab('sprites');
+		}
+		else {
+			showSpriteTemplateTabs = false;
+			showTemplateSprites = false;
+			fixLayout();
+			refresh();
+		}
+	}
+	
+	public function selectTab(tabName:String):void {
+		spritesTab.turnOff();
+		templatesTab.turnOff();
+		
+		showSpriteDetails(false);
+		
+		if (tabName == 'sprites') {
+			spritesTab.turnOn();
+			showTemplateSprites = false;
+			refresh();
+		}
+		if (tabName == 'templates') {
+			templatesTab.turnOn();
+			showTemplateSprites = true;
+			refresh();
+		}
+	}
+
+	private function makeTab(label:String, action:Function):IconButton {
+		return new IconButton(action, makeTabImg(label, true), makeTabImg(label, false), true);
+	}
+	
+	private function makeTabImg(label:String, isSelected:Boolean):Sprite {
+		var img:Sprite = new Sprite();
+		var tf:TextField = new TextField();
+		tf.defaultTextFormat = new TextFormat(CSS.font, 12, isSelected ? CSS.onColor : CSS.offColor, false);
+		tf.text = Translator.map(label);
+		tf.width = tf.textWidth + 5;
+		tf.height = tf.textHeight + 5;
+		tf.x = 10;
+		tf.y = 4;
+		img.addChild(tf);
+		
+		var g:Graphics = img.graphics;
+		var w:int = tf.width + 20;
+		var h:int = 28;
+		var r:int = 9;
+		if (isSelected) drawTopBar(g, CSS.titleBarColors, getTopBarPath(w, h), w, h);
+		else drawSelected(g, [0xf2f2f2, 0xd1d2d3], getTopBarPath(w, h), w, h);
+		return img;
 	}
 
 }}

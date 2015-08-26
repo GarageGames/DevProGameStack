@@ -24,19 +24,32 @@
 // Represents a variable display.
 
 package watchers {
+import flash.display.Graphics;
+import flash.display.Shape;
+import flash.display.Sprite;
+import flash.events.MouseEvent;
+import flash.filters.BevelFilter;
+import flash.geom.Point;
+import flash.text.TextField;
+import flash.text.TextFormat;
+
+import blocks.Block;
 import blocks.BlockIO;
 
-import flash.display.*;
-	import flash.filters.BevelFilter;
-	import flash.events.MouseEvent;
-	import flash.geom.Point;
-	import flash.text.*;
-	import interpreter.*;
-	import scratch.*;
-	import uiwidgets.*;
-	import util.*;
-	import blocks.Block;
-	import translation.Translator;
+import interpreter.Variable;
+
+import scratch.ScratchObj;
+import scratch.ScratchRuntime;
+import scratch.ScratchSprite;
+
+import translation.Translator;
+
+import uiwidgets.DialogBox;
+import uiwidgets.Menu;
+import uiwidgets.ResizeableFrame;
+
+import util.DragClient;
+import util.JSON;
 
 public class Watcher extends Sprite implements DragClient {
 
@@ -67,6 +80,9 @@ public class Watcher extends Sprite implements DragClient {
 	private var slider:Shape;
 	private var knob:Shape;
 
+	// For Game Snap
+	public var designTabWatcher:Boolean = false;
+	
 	// stepping
 	private var lastValue:*;
 
@@ -90,10 +106,19 @@ public class Watcher extends Sprite implements DragClient {
 	public static function strings():Array {
 		return [
 			'Max', 'Min', 'Slider Range',
-			'normal readout', 'large readout', 'slider', 'set slider min and max', 'hide'];
+			'normal readout', 'large readout', 'slider', 'set slider min and max', 'hide', 'remove from Design tab'];
 	}
 
 	public function initWatcher(target:ScratchObj, cmd:String, param:String, color:int):void {
+		this.target = target;
+		this.cmd = cmd;
+		this.param = param;
+		this.mode = NORMAL_MODE;
+		setColor(color);
+		updateLabel();
+	}
+	
+	public function initWatcherDesignTab(target:ScratchObj, cmd:String, param:String, color:int):void {
 		this.target = target;
 		this.cmd = cmd;
 		this.param = param;
@@ -110,6 +135,19 @@ public class Watcher extends Sprite implements DragClient {
 		// link to this watcher from its variable
 		var v:Variable = target.lookupVar(param);
 		if (v != null) v.watcher = this;
+		setColor(Specs.variableColor);
+		setLabel((target.isStage) ? varName : (target.objName + ": " + varName));
+	}
+	
+	// For Game Snap
+	public function initForVarDesignTab(target:ScratchObj, varName:String):void {
+		this.target = target;
+		this.cmd = "getVar:";
+		this.param = varName;
+		this.mode = NORMAL_MODE;
+		// link to this watcher from its variable
+		var v:Variable = target.lookupVar(param);
+		if (v != null) v.designWatcher = this;
 		setColor(Specs.variableColor);
 		setLabel((target.isStage) ? varName : (target.objName + ": " + varName));
 	}
@@ -216,6 +254,7 @@ public class Watcher extends Sprite implements DragClient {
 		if (target is ScratchSprite) {
 			switch(cmd) {
 				case "costumeIndex": return ScratchSprite(target).costumeNumber();
+				case "costumeCount": return ScratchSprite(target).costumes.length;	// Game Snap
 				case "xpos": return ScratchSprite(target).scratchX;
 				case "ypos": return ScratchSprite(target).scratchY;
 				case "heading": return ScratchSprite(target).direction;
@@ -356,12 +395,24 @@ public class Watcher extends Sprite implements DragClient {
 	/* Menu */
 
 	public function menu(evt:MouseEvent):Menu {
+		var self:* = this;	// For Game Snap, added so we can access the watcher in the handleMenu() function, which is actually executed under a Menu instance.
 		function handleMenu(item:int):void {
 			if ((1 <= item) && (item <= 3)) setMode(item);
 			if (5 == item) sliderMinMaxDialog();
 			if (item == 10) {
 				visible = false;
 				Scratch.app.updatePalette(false);
+			}
+			// For Game Snap Design tab
+			if (item == 100) {
+				if (cmd == 'getVar:') {
+					var v:Variable = target.lookupVar(param);
+					if (v != null) {
+						v.designWatcher = null;
+					}
+				}
+				Designer.dapp.designTabPart.removeWatcher(self);
+				visible = false;
 			}
 		}
 		if (!Scratch.app.editMode) return null;
@@ -377,7 +428,16 @@ public class Watcher extends Sprite implements DragClient {
 			}
 		}
 		m.addLine();
-		m.addItem("hide", 10);
+		
+		// For Game Snap added this check for a Design tab watcher
+		if(!designTabWatcher) {
+			// This is the original menu item
+			m.addItem("hide", 10);
+		}
+		else {
+			// For Game Snap Design tab
+			m.addItem("remove from Design tab", 100);
+		}
 		return m;
 	}
 
@@ -454,11 +514,27 @@ public class Watcher extends Sprite implements DragClient {
 		json.writeKeyValue("x", x);
 		json.writeKeyValue("y", y);
 		json.writeKeyValue("visible", visible);
+		
+		// For Game Snap
+		json.writeKeyValue("designTabWatcher", designTabWatcher);
 	}
 
 	public function readJSON(obj:Object):void {
-		if (obj.cmd == "getVar:") initForVar(obj.target, obj.param);
-		else initWatcher(obj.target, obj.cmd, obj.param, obj.color);
+		// For Game Snap
+		if(!obj.designTabWatcher) {
+			// original code here
+			if (obj.cmd == "getVar:") initForVar(obj.target, obj.param);
+			else initWatcher(obj.target, obj.cmd, obj.param, obj.color);
+		}
+		else {
+			// Place on design tab
+			if (obj.cmd == "getVar:") initForVarDesignTab(obj.target, obj.param);
+			//else initWatcher(obj.target, obj.cmd, obj.param, obj.color);
+			
+			Designer.dapp.designTabPart.addWatcher(this);
+		}
+		designTabWatcher = obj.designTabWatcher;
+		
 		sliderMin = obj.sliderMin;
 		sliderMax = obj.sliderMax;
 		isDiscrete = obj.isDiscrete;

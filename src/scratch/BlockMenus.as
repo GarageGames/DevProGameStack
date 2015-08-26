@@ -18,17 +18,38 @@
  */
 
 package scratch {
-	import flash.display.*;
-	import flash.events.*;
-	import flash.geom.*;
-	import flash.ui.*;
-	import blocks.*;
-	import filters.*;
-	import sound.*;
+	import flash.display.BitmapData;
+	import flash.display.DisplayObject;
+	import flash.display.Graphics;
+	import flash.display.Sprite;
+	import flash.events.Event;
+	import flash.events.MouseEvent;
+	import flash.geom.Matrix;
+	import flash.geom.Point;
+	import flash.ui.Mouse;
+	import flash.ui.MouseCursor;
+	
+	import blocks.Block;
+	import blocks.BlockArg;
+	
+	import filters.FilterPack;
+	
+	import interpreter.Variable;
+	
+	import sound.SoundBank;
+	
 	import translation.Translator;
+	
 	import ui.ProcedureSpecEditor;
-	import uiwidgets.*;
-	import util.*;
+	
+	import uiwidgets.DialogBox;
+	import uiwidgets.Menu;
+	import uiwidgets.Piano;
+	
+	import util.DragClient;
+	
+	import watchers.ListWatcher;
+	import watchers.Watcher;
 
 public class BlockMenus implements DragClient {
 
@@ -138,7 +159,7 @@ public class BlockMenus implements DragClient {
 			'other scripts in sprite', 'other scripts in stage',
 			'backdrop #', 'backdrop name', 'volume', 'OK', 'Cancel',
 			'Edit Block', 'Rename' , 'New name', 'Delete', 'Broadcast', 'New Message', 'Message Name',
-			'delete variable', 'rename variable',
+			'delete variable', 'rename variable', 'display on Design tab',
 			'video motion', 'video direction',
 			'Low C', 'Middle C', 'High C',
 		];
@@ -170,7 +191,7 @@ public class BlockMenus implements DragClient {
 			return false;
 		case 'list':
 			if (isGeneric(item)) return true;
-			return ['delete list'].indexOf(item) > -1;
+			return ['delete list', 'display on Design tab'].indexOf(item) > -1;
 		case 'sound':
 			return ['record...'].indexOf(item) > -1;
 		case 'sprite':
@@ -181,7 +202,7 @@ public class BlockMenus implements DragClient {
 			return false; // handled directly by menu code
 		case 'var':
 			if (isGeneric(item)) return true;
-			return ['delete variable', 'rename variable'].indexOf(item) > -1;
+			return ['delete variable', 'rename variable', 'display on Design tab'].indexOf(item) > -1;
 		}
 		return true;
 	}
@@ -530,6 +551,12 @@ public class BlockMenus implements DragClient {
 	// ***** Procedure menu (for procedure definition hats and call blocks) *****
 
 	private function procMenu(evt:MouseEvent):void {
+		// For Game Snap, don't show a menu for a procedure that came from a template object.  It should
+		// only be edited on the template object itself.
+		if(block.fromTemplateObj) {
+			return;
+		}
+		
 		var m:Menu = new Menu(null, 'proc');
 		addGenericBlockItems(m);
 		m.addItem('edit', editProcSpec);
@@ -580,10 +607,20 @@ public class BlockMenus implements DragClient {
 	// ***** Variable and List menus *****
 
 	private function listMenu(evt:MouseEvent):void {
+		// For Game Snap, don't show a menu for a list that came from a template object.  It should
+		// only be edited on the template object itself.
+		if(block.fromTemplateObj) {
+			return;
+		}
+		
 		var m:Menu = new Menu(varOrListSelection, 'list');
 		var isGetter:Boolean = block.op == Specs.GET_LIST;
 		if (isGetter) {
-			if (isInPalette(block)) m.addItem('delete list', deleteVarOrList); // list reporter in palette
+			if (isInPalette(block)) {
+				m.addItem('delete list', deleteVarOrList); // list reporter in palette
+				m.addLine();
+				m.addItem('display on Design tab', displayVarOrListOnDesignTab);	// For Game Snap
+			}
 			addGenericBlockItems(m);
 			m.addLine()
 		}
@@ -602,11 +639,19 @@ public class BlockMenus implements DragClient {
 	}
 
 	private function varMenu(evt:MouseEvent):void {
+		// For Game Snap, don't show a menu for a variable that came from a template object.  It should
+		// only be edited on the template object itself.
+		if(block.fromTemplateObj) {
+			return;
+		}
+		
 		var m:Menu = new Menu(varOrListSelection, 'var');
 		var isGetter:Boolean = (block.op == Specs.GET_VAR);
 		if (isGetter && isInPalette(block)) { // var reporter in palette
 			m.addItem('rename variable', renameVar);
 			m.addItem('delete variable', deleteVarOrList);
+			m.addLine();
+			m.addItem('display on Design tab', displayVarOrListOnDesignTab);	// For Game Snap
 			addGenericBlockItems(m);
 		} else {
 			if (isGetter) addGenericBlockItems(m);
@@ -671,10 +716,65 @@ public class BlockMenus implements DragClient {
 		DialogBox.confirm(Translator.map('Delete') + ' ' + blockVarOrListName() + '?', app.stage, doDelete);
 	}
 
+	// For Game Snap
+	private function displayVarOrListOnDesignTab():void {
+		//var b:Block = block.duplicate(false, false);
+		var targetObj:ScratchObj = app.viewedObj();
+		var name:String = blockVarOrListName();
+		
+		if(block.op == Specs.GET_VAR) {
+			if (targetObj.varNames().indexOf(name) < 0) {
+				targetObj = app.stagePane;
+			}
+			if (targetObj.varNames().indexOf(name) >= 0) {
+				var v:Variable = targetObj.lookupVar(name);
+				if(v.designWatcher != null) {
+					// Already have a Design tab watcher
+					return;
+				}
+			}
+			var w:Watcher = new Watcher();
+			w.initForVarDesignTab(targetObj, name);
+			Designer.dapp.designTabPart.addWatcher(w);
+		}
+		else if(block.op == Specs.GET_LIST) {
+			if (targetObj.listNames().indexOf(name) < 0) {
+				targetObj = app.stagePane;
+			}
+			var wdo:DisplayObject = getListReference(targetObj, name);
+			if(wdo is ListWatcher) {
+				var originalLW:ListWatcher = ListWatcher(wdo);
+				var lw:ListWatcher = new ListWatcher(name, null, targetObj);
+				lw.designTabListWatcher = true;
+				originalLW.connectToDesignTabListWatcher(lw);
+				lw.prepareToShow();
+				Designer.dapp.designTabPart.addListWatcher(lw);
+			}
+			
+			//w.initWatcher(targetObj, cmd, param, color);
+		}
+
+		// Init the watcher's properties such as sliders
+		
+		app.setSaveNeeded();
+	}
+	
 	private function blockVarOrListName():String {
 		return (blockArg != null) ? blockArg.argValue : block.spec;
 	}
 
+	// For Game Snap.  Copied from watcherForList() in ScratchRuntime.as
+	private function getListReference(targetObj:ScratchObj, listName:String):DisplayObject {
+		var w:ListWatcher;
+		for each (w in targetObj.lists) {
+			if (w.listName == listName) return w;
+		}
+		for each (w in app.stagePane.lists) {
+			if (w.listName == listName) return w;
+		}
+		return null;
+	}
+	
 	private function setBlockVarOrListName(newName:String):void {
 		if (newName.length == 0) return;
 		if ((block.op == Specs.GET_VAR) || (block.op == Specs.SET_VAR) || (block.op == Specs.CHANGE_VAR)) {

@@ -23,37 +23,77 @@
 // This is the top-level application.
 
 package {
-import blocks.*;
-
-import extensions.ExtensionManager;
-
-import flash.display.*;
+import flash.display.DisplayObject;
+import flash.display.Graphics;
+import flash.display.Shape;
+import flash.display.Sprite;
+import flash.display.StageAlign;
+import flash.display.StageDisplayState;
+import flash.display.StageScaleMode;
 import flash.errors.IllegalOperationError;
-import flash.events.*;
+import flash.events.ErrorEvent;
+import flash.events.Event;
+import flash.events.KeyboardEvent;
+import flash.events.MouseEvent;
+import flash.events.UncaughtErrorEvent;
+import flash.filesystem.File;
 import flash.geom.Point;
 import flash.geom.Rectangle;
 import flash.net.FileReference;
 import flash.net.FileReferenceList;
 import flash.net.LocalConnection;
-import flash.system.*;
-import flash.text.*;
-import flash.utils.*;
+import flash.system.Capabilities;
+import flash.system.System;
+import flash.text.TextField;
+import flash.text.TextFieldAutoSize;
+import flash.text.TextFormat;
+import flash.utils.ByteArray;
+import flash.utils.getTimer;
 
-import interpreter.*;
+import blocks.Block;
+
+import extensions.ExtensionManager;
+
+import interpreter.Interpreter;
 
 import render3d.DisplayObjectContainerIn3D;
 
-import scratch.*;
+import scratch.BlockMenus;
+import scratch.PaletteBuilder;
+import scratch.ScratchCostume;
+import scratch.ScratchObj;
+import scratch.ScratchRuntime;
+import scratch.ScratchSound;
+import scratch.ScratchSprite;
+import scratch.ScratchStage;
 
-import translation.*;
+import translation.Translator;
 
-import ui.*;
-import ui.media.*;
-import ui.parts.*;
+import ui.BlockPalette;
+import ui.CameraDialog;
+import ui.LoadProgress;
+import ui.media.MediaInfo;
+import ui.media.MediaLibrary;
+import ui.media.MediaPane;
+import ui.parts.ImagesPart;
+import ui.parts.LibraryPart;
+import ui.parts.ScriptsPart;
+import ui.parts.SoundsPart;
+import ui.parts.StagePart;
+import ui.parts.TabsPart;
+import ui.parts.TopBarPart;
 
-import uiwidgets.*;
+import uiwidgets.BlockColorEditor;
+import uiwidgets.CursorTool;
+import uiwidgets.DialogBox;
+import uiwidgets.IconButton;
+import uiwidgets.Menu;
+import uiwidgets.ScriptsPane;
 
-import util.*;
+import util.GestureHandler;
+import util.ProjectIO;
+import util.Server;
+import util.Transition;
 
 import watchers.ListWatcher;
 
@@ -73,9 +113,15 @@ public class Scratch extends Sprite {
 	public var jsEnabled:Boolean = false; // true when the SWF can talk to the webpage
 	
 	// For Game Snap
-	public static const gameSnapFileVersion:int = 1;	// The current Game Snap file version
+	// File version info:
+	// 1 = Global tab introduced
+	// 2 = Template sprites introduced
+	// 3 = Locked in editor, and mouse passthrough introduced
+	public static const gameSnapFileVersion:int = 3;	// The current Game Snap file version
 	public var gameSnapLastReadFileVersion:int = 0;		// The last read Game Snap file version
-	public var canAddFocusAreaBlocks:Boolean = false;	// Determines whether Focus Area blocks can be added from the More Blocks category
+	public var gameSnapLastReadSpriteFileVersion:int = 0;	// Used when reading in sprites, the last read Game Snap file version
+	public var canAddFocusAreaBlocks:Boolean = false;		// Game Snap: Determines whether Focus Area blocks can be added from the More Blocks category
+	public var showDataByStringBlocks:Boolean = false;	// Game Snap: Determines whether to show blocks for accessing variables by string
 
 	// Runtime
 	public var runtime:ScratchRuntime;
@@ -398,6 +444,7 @@ public class Scratch extends Sprite {
 		if (s.slice(-3) == '.sb') s = s.slice(0, -3);
 		if (s.slice(-4) == '.sb2') s = s.slice(0, -4);
 		if (s.slice(-5) == '.snap') s = s.slice(0, -5);
+		if (s.slice(-6) == '.stack') s = s.slice(0, -6);
 		stagePart.setProjectName(s);
 	}
 
@@ -1186,19 +1233,29 @@ public class Scratch extends Sprite {
 	}
 
 	static public function loadSingleFile(fileLoaded:Function, filters:Array = null):void {
+		
+		// Modified this whole method for Game Snap so we use File instead of FileReference.  This allows
+		// us to ultimately obtain the file's path, which will be stored as the project's path within
+		// the fileLoaded callback.
+		
 		function fileSelected(event:Event):void {
-			if (fileList.fileList.length > 0) {
-				var file:FileReference = FileReference(fileList.fileList[0]);
-				file.addEventListener(Event.COMPLETE, fileLoaded);
-				file.load();
-			}
+			//if (fileList.fileList.length > 0) {
+				//var file:FileReference = FileReference(fileList.fileList[0]);
+				//file.addEventListener(Event.COMPLETE, fileLoaded);
+				//file.load();
+			//}
+			loadFile.addEventListener(Event.COMPLETE, fileLoaded);
+			loadFile.load();
 		}
 
-		var fileList:FileReferenceList = new FileReferenceList();
-		fileList.addEventListener(Event.SELECT, fileSelected);
+		//var fileList:FileReferenceList = new FileReferenceList();
+		//fileList.addEventListener(Event.SELECT, fileSelected);
+		var loadFile:File = new File();
+		loadFile.addEventListener(Event.SELECT, fileSelected);
 		try {
 			// Ignore the exception that happens when you call browse() with the file browser open
-			fileList.browse(filters);
+			//fileList.browse(filters);
+			loadFile.browse(filters);
 		} catch(e:*) {}
 	}
 

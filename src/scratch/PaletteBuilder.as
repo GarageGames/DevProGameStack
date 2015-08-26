@@ -160,15 +160,48 @@ public class PaletteBuilder {
 			nextY += 5;
 			for each (var proc:Block in definitions) {
 				var b:Block = new Block(proc.spec, ' ', Specs.procedureColor, Specs.CALL, proc.defaultArgValues);
+				
+				// For Game Snap, if this is a local block to the global object, then be sure to mark this procedure block as global as well
+				if(app.viewedObj() == app.stagePane.globalObjSprite()) {
+					b.isGlobal = true;
+				}
+				
 				addItem(b);
 			}
 			nextY += 5;
 		}
 
+		var x:int = 5;
+		
+		// For Game Snap, add template object blocks here
+		if(app.viewedObj().basedOnTemplateObj != null) {
+			// Add the template object definitions
+			nextY += 9;
+			
+			var templateBlockLabel:TextField = makeLabel("Template Custom Blocks ");
+			templateBlockLabel.x = x;
+			templateBlockLabel.y = nextY;
+			app.palette.addChild(templateBlockLabel);
+			
+			addLine(templateBlockLabel.x + templateBlockLabel.width, nextY + (templateBlockLabel.height / 2), pwidth - x - 38 - templateBlockLabel.width);
+			
+			nextY += templateBlockLabel.height + 9;
+			
+			definitions = app.viewedObj().basedOnTemplateObj.procedureDefinitions();
+			if (definitions.length > 0) {
+				nextY += 5;
+				for each (proc in definitions) {
+					b = new Block(proc.spec, ' ', Specs.procedureColor, Specs.CALL, proc.defaultArgValues);
+					b.fromTemplateObj = true;
+					addItem(b);
+				}
+				nextY += 5;
+			}
+		}
+		
 		// For Game Snap, add global blocks here
-		if(app.stagePane.globalObjSprite() && app.viewedObj() != app.stagePane.globalObjSprite()) {
+		if(app.stagePane.globalObjSprite() && app.viewedObj() != app.stagePane.globalObjSprite() && app.stagePane.globalObjSprite().procedureDefinitions().length > 0) {
 			// Add the global block definitions.
-			var x:int = 5;
 			nextY += 9;
 			
 			var globalBlockLabel:TextField = makeLabel("Global Custom Blocks ");
@@ -211,32 +244,177 @@ public class PaletteBuilder {
 	private function showDataCategory():void {
 		var catColor:int = Specs.variableColor;
 
+		// Add the variables by string for Game Snap
+		if(app.viewedObj().isGlobalObj || app.showDataByStringBlocks) {
+			addBlocksForCategory(Specs.dataSpecialCategory, catColor);
+			nextY += 15;
+		}
+		
 		// variable buttons, reporters, and set/change blocks
-		addItem(new Button(Translator.map('Make a Variable'), makeVariable));
-		var varNames:Array = app.runtime.allVarNames().sort();
-		if (varNames.length > 0) {
-			for each (var n:String in varNames) {
-				addVariableCheckbox(n, false);
-				addItem(new Block(n, 'r', catColor, Specs.GET_VAR), true);
+		var x:int = 5;
+		if(!app.viewedObj().isGlobalObj) {	// Added this check for Game Snap
+			addItem(new Button(Translator.map('Make a Variable'), makeVariable));
+			
+			// For Game Snap, split up the variables between Local and Global
+
+			// Local variables, if any
+			var varLocalNames:Array = app.runtime.allLocalVarNames().sort();
+			if(varLocalNames.length > 0) {
+				var labelAdded:Boolean = false;
+
+				// Go through the variables
+				for each (var n:String in varLocalNames) {
+					// For Game Snap, only add a local variable that isn't in the template object variable list
+					if(app.runtime.allTemplateVarNames().indexOf(n) == -1) {
+						// If we haven't added the label yet, do so now
+						if(!labelAdded) {
+							labelAdded = true;
+							var localVarLabel:TextField = makeLabel("Local Variables ");
+							localVarLabel.x = 5;
+							localVarLabel.y = nextY;
+							app.palette.addChild(localVarLabel);
+							addLine(localVarLabel.x + localVarLabel.width, nextY + (localVarLabel.height / 2), pwidth - x - 38 - localVarLabel.width);
+							nextY += localVarLabel.height;
+						}
+						addVariableCheckbox(n, false);
+						addItem(new Block(n, 'r', catColor, Specs.GET_VAR), true);
+					}
+				}
+				//nextY += 10;
 			}
-			nextY += 10;
-			addBlocksForCategory(Specs.dataCategory, catColor);
+			
+			// Template variables, if any
+			var varTemplateNames:Array = app.runtime.allTemplateVarNames().sort();
+			if(varTemplateNames.length > 0) {
+				// First add a label
+				var templateVarLabel:TextField = makeLabel("Template Variables ");
+				templateVarLabel.x = 5;
+				templateVarLabel.y = nextY;
+				app.palette.addChild(templateVarLabel);
+				addLine(templateVarLabel.x + templateVarLabel.width, nextY + (templateVarLabel.height / 2), pwidth - x - 38 - templateVarLabel.width);
+				nextY += templateVarLabel.height;
+				
+				// Now the variables themselves
+				for each (var n:String in varTemplateNames) {
+					addVariableCheckbox(n, false);
+					var tb:Block = new Block(n, 'r', catColor, Specs.GET_VAR);
+					tb.fromTemplateObj = true;
+					addItem(tb, true);
+				}
+			}
+			
+			// Global variables, if any
+			var varGlobalNames:Array = app.runtime.allGlobalVarNames().sort();
+			if(varGlobalNames.length > 0) {
+				// First add a label
+				var globalVarLabel:TextField = makeLabel("Global Variables ");
+				globalVarLabel.x = 5;
+				globalVarLabel.y = nextY;
+				app.palette.addChild(globalVarLabel);
+				addLine(globalVarLabel.x + globalVarLabel.width, nextY + (globalVarLabel.height / 2), pwidth - x - 38 - globalVarLabel.width);
+				nextY += globalVarLabel.height;
+				
+				// Now the variables themselves
+				for each (var n:String in varGlobalNames) {
+					addVariableCheckbox(n, false);
+					addItem(new Block(n, 'r', catColor, Specs.GET_VAR), true);
+				}
+				//nextY += 10;
+			}
+			
+			// Now the variable code blocks
+			if(varLocalNames.length > 0 || varTemplateNames.length > 0 || varGlobalNames.length > 0) {
+				nextY += 2;
+				addLine(x, nextY, pwidth - x - 38);
+				nextY += 7;
+				addBlocksForCategory(Specs.dataCategory, catColor);
+				nextY += 15;
+			}
+			
+			// Original code here:
+			//var varNames:Array = app.runtime.allVarNames().sort();
+			//if (varNames.length > 0) {
+			//	for each (var n:String in varNames) {
+			//		addVariableCheckbox(n, false);
+			//		addItem(new Block(n, 'r', catColor, Specs.GET_VAR), true);
+			//	}
+			//	nextY += 10;
+			//	addBlocksForCategory(Specs.dataCategory, catColor);
+			//	nextY += 15;
+			//}
+		}
+		
+		// lists
+		catColor = Specs.listColor;
+		
+		// Add the lists by string for Game Snap
+		if(app.viewedObj().isGlobalObj || app.showDataByStringBlocks) {
+			addBlocksForCategory(Specs.listSpecialCategory, catColor);
 			nextY += 15;
 		}
 
-		// lists
-		catColor = Specs.listColor;
-		addItem(new Button(Translator.map('Make a List'), makeList));
-
-		var listNames:Array = app.runtime.allListNames().sort();
-		if (listNames.length > 0) {
-			for each (n in listNames) {
-				addVariableCheckbox(n, true);
-				addItem(new Block(n, 'r', catColor, Specs.GET_LIST), true);
+		if(!app.viewedObj().isGlobalObj) {	// Added this check for Game Snap
+			addItem(new Button(Translator.map('Make a List'), makeList));
+			
+			// For Game Snap, split up the lists between Local and Global
+			
+			// Local lists, if any
+			var listLocalNames:Array = app.runtime.allLocalListNames().sort();
+			if(listLocalNames.length > 0) {
+				// First add a label
+				var localListLabel:TextField = makeLabel("Local Lists ");
+				localListLabel.x = 5;
+				localListLabel.y = nextY;
+				app.palette.addChild(localListLabel);
+				addLine(localListLabel.x + localListLabel.width, nextY + (localListLabel.height / 2), pwidth - x - 38 - localListLabel.width);
+				nextY += localListLabel.height;
+				
+				// Now the lists themselves
+				for each (var n:String in listLocalNames) {
+					addVariableCheckbox(n, true);
+					addItem(new Block(n, 'r', catColor, Specs.GET_LIST), true);
+				}
 			}
-			nextY += 10;
-			addBlocksForCategory(Specs.listCategory, catColor);
+			
+			// Global lists, if any
+			var listGlobalNames:Array = app.runtime.allGlobalListNames().sort();
+			if(listGlobalNames.length > 0) {
+				// First add a label
+				var globalListLabel:TextField = makeLabel("Global Lists ");
+				globalListLabel.x = 5;
+				globalListLabel.y = nextY;
+				app.palette.addChild(globalListLabel);
+				addLine(globalListLabel.x + globalListLabel.width, nextY + (globalListLabel.height / 2), pwidth - x - 38 - globalListLabel.width);
+				nextY += globalListLabel.height;
+				
+				// Now the lists themselves
+				for each (var n:String in listGlobalNames) {
+					addVariableCheckbox(n, true);
+					addItem(new Block(n, 'r', catColor, Specs.GET_LIST), true);
+				}
+			}
+			
+			// Now the list code blocks
+			if(listLocalNames.length > 0 || listGlobalNames.length > 0) {
+				nextY += 2;
+				addLine(x, nextY, pwidth - x - 38);
+				nextY += 7;
+				addBlocksForCategory(Specs.listCategory, catColor);
+				nextY += 15;
+			}
+
+			// Original code:
+			//var listNames:Array = app.runtime.allListNames().sort();
+			//if (listNames.length > 0) {
+			//	for each (n in listNames) {
+			//		addVariableCheckbox(n, true);
+			//		addItem(new Block(n, 'r', catColor, Specs.GET_LIST), true);
+			//	}
+			//	nextY += 10;
+			//	addBlocksForCategory(Specs.listCategory, catColor);
+			//}
 		}
+		
 		updateCheckboxes();
 	}
 
@@ -354,7 +532,7 @@ public class PaletteBuilder {
 
 	protected function isCheckboxReporter(op:String):Boolean {
 		const checkboxReporters: Array = [
-			'xpos', 'ypos', 'heading', 'costumeIndex', 'scale', 'volume', 'timeAndDate',
+			'xpos', 'ypos', 'heading', 'costumeIndex', 'costumeCount', 'scale', 'volume', 'timeAndDate',	// Added 'costumeCount' for Game Snap
 			'backgroundIndex', 'sceneName', 'tempo', 'answer', 'timer', 'soundLevel', 'isLoud',
 			'sensor:', 'sensorPressed:', 'senseVideoMotion', 'xScroll', 'yScroll',
 			'getDistance', 'getTilt'];
@@ -362,7 +540,7 @@ public class PaletteBuilder {
 	}
 
 	private function isSpriteSpecific(op:String):Boolean {
-		const spriteSpecific: Array = ['costumeIndex', 'xpos', 'ypos', 'heading', 'scale', 'volume'];
+		const spriteSpecific: Array = ['costumeIndex', 'costumeCount', 'xpos', 'ypos', 'heading', 'scale', 'volume'];	// Added 'costumeCount' for Game Snap
 		return spriteSpecific.indexOf(op) > -1;
 	}
 

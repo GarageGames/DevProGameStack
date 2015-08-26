@@ -48,7 +48,9 @@ public class Specs {
 	public static const dataCategory:int = 9;
 	public static const myBlocksCategory:int = 10;
 	public static const listCategory:int = 12;
-	public static const focusAreaCategory:int = 13;
+	public static const focusAreaCategory:int = 13;		// For Game Snap
+	public static const dataSpecialCategory:int = 14;	// For Game Snap variables set by string
+	public static const listSpecialCategory:int = 15;	// For Game Snap lists set by string
 	public static const extensionsCategory:int = 20;
 
 	public static var variableColor:int = 0xEE7D16; // Scratch 1.4: 0xF3761D
@@ -75,7 +77,9 @@ public class Specs {
 		[10, "More Blocks",	procedureColor],
 		[11, "Parameter",	parameterColor],
 		[12, "List",		listColor],
-		[13, "Focus Area",	focusAreaColor],
+		[13, "Focus Area",	focusAreaColor],		// Game Snap
+		[14, "Data By String",	variableColor],		// Game Snap
+		[15, "List By String",	variableColor],		// Game Snap
 		[20, "Extension",	extensionsColor],
 	];
 
@@ -145,12 +149,16 @@ public class Specs {
 		["say %s",								" ", 2, "say:",							"Hello!"],
 		["think %s for %n secs",				" ", 2, "think:duration:elapsed:from:", "Hmm...", 2],
 		["think %s",							" ", 2, "think:",						"Hmm..."],
+		["hide bubble",							" ", 2, "hideBubble"],	// Game Snap
 		["-"],
 		["show",								" ", 2, "show"],
 		["hide",								" ", 2, "hide"],
 		["-"],
 		["switch costume to %m.costume",		" ", 2, "lookLike:",				"costume1"],
+		["switch costume to %s",				" ", 2, "lookLikeString:",			"costume1"],	// Game Snap
+		["switch costume to # %n",				" ", 2, "lookLikeIndex:",			"1"],	// Game Snap
 		["next costume",						" ", 2, "nextCostume"],
+		["previous costume",					" ", 2, "previousCostume"],	// Game Snap
 		["switch backdrop to %m.backdrop",		" ", 2, "startScene", 				"backdrop1"],
 		["-"],
 		["change %m.effect effect by %n",		" ", 2, "changeGraphicEffect:by:",	"color", 25],
@@ -164,6 +172,7 @@ public class Specs {
 		["go back %n layers",					" ", 2, "goBackByLayers:", 			1],
 		["-"],
 		["costume #",							"r", 2, "costumeIndex"],
+		["costume count",						"r", 2, "costumeCount"],	// Game Snap
 		["backdrop name",						"r", 2, "sceneName"],
 		["size",								"r", 2, "scale"],
 
@@ -181,7 +190,11 @@ public class Specs {
 
 		// sound
 		["play sound %m.sound",					" ", 3, "playSound:",						"pop"],
+		["play sound %s",						" ", 3, "playSoundString:",					"pop"],	// For Game Snap
 		["play sound %m.sound until done",		" ", 3, "doPlaySoundAndWait",				"pop"],
+		["play sound %s until done",			" ", 3, "doPlaySoundStringAndWait:",		"pop"],	// For Game Snap
+		["play sound %s from stage",			" ", 3, "playStageSoundString:",			"pop"],	// For Game Snap
+		["play sound %s from stage until done",	" ", 3, "doPlayStageSoundStringAndWait:",	"pop"],	// For Game Snap
 		["stop all sounds",						" ", 3, "stopAllSounds"],
 		["-"],
 		["play drum %d.drum for %n beats",		" ", 3, "playDrum",							1, 0.25],
@@ -268,9 +281,11 @@ public class Specs {
 
 		// sensing
 		["touching %m.touching?",				"b", 7, "touching:",			""],
+		["touching %s",							"b", 7, "touchingString:",		""],	// For Game Snap
 		["touching color %c?",					"b", 7, "touchingColor:"],
 		["color %c is touching %c?",			"b", 7, "color:sees:"],
 		["distance to %m.spriteOrMouse",		"r", 7, "distanceTo:",			""],
+		["distance to %s",						"r", 7, "distanceToString:",	""],	// For Game Snap
 		["-"],
 		["ask %s and wait",						" ", 7, "doAsk", 				"What's your name?"],
 		["answer",								"r", 7, "answer"],
@@ -290,6 +305,7 @@ public class Specs {
 		["reset timer",							" ", 7, "timerReset"],
 		["-"],
 		["%m.attribute of %m.spriteOrStage",	"r", 7, "getAttribute:of:"],
+		["%m.attribute of %s",					"r", 7, "getAttribute:ofString:"],		// For Game Snap
 		["-"],
 		["current %m.timeAndDate", 				"r", 7, "timeAndDate",			"minute"],
 		["days since 2000", 					"r", 7, "timestamp"],
@@ -328,8 +344,10 @@ public class Specs {
 		["pick random %n to %n",		"r", 8, "randomFrom:to:",		1, 10],
 		["-"],
 		["%s < %s",								"b", 8, "<",					"", ""],
+		["%s <= %s",							"b", 8, "<=",					"", ""],	// For Game Snap
 		["%s = %s",								"b", 8, "=",					"", ""],
 		["%s > %s",								"b", 8, ">",					"", ""],
+		["%s >= %s",							"b", 8, ">=",					"", ""],	// For Game Snap
 		["-"],
 		["%b and %b",							"b", 8, "&"],
 		["%b or %b",							"b", 8, "|"],
@@ -349,6 +367,13 @@ public class Specs {
 		["change %m.var by %n",								" ", 9, CHANGE_VAR],
 		["show variable %m.var",							" ", 9, "showVariable:"],
 		["hide variable %m.var",							" ", 9, "hideVariable:"],
+		
+		// variables set by string (for Game Snap)
+		["get %s",											"r", 14, "readVariableString:"],
+		["set %s to %s",									" ", 14, SET_VAR],
+		["change %s by %n",									" ", 14, CHANGE_VAR],
+		["show variable %s",								" ", 14, "showVariable:"],
+		["hide variable %s",								" ", 14, "hideVariable:"],
 
 		// lists
 		["add %s to %m.list",								" ", 12, "append:toList:"],
@@ -364,6 +389,20 @@ public class Specs {
 		["show list %m.list",								" ", 12, "showList:"],
 		["hide list %m.list",								" ", 12, "hideList:"],
 		
+		// lists set by string (for Game Snap)
+		["add %s to %s",									" ", 15, "append:toList:"],
+		["-"],
+		["delete %n of %s",									" ", 15, "deleteLine:ofList:"],
+		["insert %s at %n of %s",							" ", 15, "insert:at:ofList:"],
+		["replace item %n of %s with %s",					" ", 15, "setLine:ofList:to:"],
+		["-"],
+		["item %n of %s",									"r", 15, "getLine:ofList:"],
+		["length of %s",									"r", 15, "lineCountOfList:"],
+		["%s contains %s",									"b", 15, "list:contains:"],
+		["-"],
+		["show list %s",									" ", 15, "showList:"],
+		["hide list %s",									" ", 15, "hideList:"],
+
 		// DevPro blocks
 		["Focus Area %n",						"c", 13, "focusArea", 1],
 

@@ -309,7 +309,7 @@ public class BlockIO {
 	private static function fixMouseEdgeRefs(b:Block):void {
 		var refCmds:Array = [
 			'createCloneOf', 'distanceTo:', 'getAttribute:of:',
-			'gotoSpriteOrMouse:', 'pointTowards:', 'touching:'];
+			'gotoSpriteOrMouse:', 'pointTowards:', 'touching:', 'touchingString:'];	// For Game Snap, added 'touchingString:'
 		if (refCmds.indexOf(b.op) < 0) return;
 		var arg:BlockArg;
 		if ((b.args.length == 1) && (b.args[0] is BlockArg)) arg = b.args[0];

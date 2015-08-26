@@ -24,18 +24,34 @@
 // rotation style, size, draggability, and pen state.
 
 package scratch {
-	import flash.display.*;
-	import flash.events.*;
-import flash.filters.GlowFilter;
-import flash.geom.*;
-import flash.geom.ColorTransform;
-import flash.utils.*;
+	import flash.display.BitmapData;
+	import flash.display.DisplayObject;
+	import flash.display.Shape;
+	import flash.display.Sprite;
+	import flash.events.Event;
+	import flash.events.MouseEvent;
+	import flash.filters.GlowFilter;
+	import flash.geom.ColorTransform;
+	import flash.geom.Matrix;
+	import flash.geom.Point;
+	import flash.geom.Rectangle;
 	import flash.net.FileReference;
+	import flash.utils.ByteArray;
+	
 	import filters.FilterPack;
+	
 	import interpreter.Variable;
+	
 	import translation.Translator;
+	
+	import ui.TemplateObjDialog;
+	
 	import uiwidgets.Menu;
-	import util.*;
+	
+	import util.Color;
+	import util.JSON;
+	import util.ProjectIO;
+	
 	import watchers.ListWatcher;
 
 public class ScratchSprite extends ScratchObj {
@@ -64,7 +80,7 @@ public class ScratchSprite extends ScratchObj {
 
 	public var spriteInfo:Object = {};
 	private var geomShape:Shape;
-
+	
 	public function ScratchSprite(name:String = 'Sprite1') {
 		objName = name;
 		filterPack = new FilterPack(this);
@@ -77,6 +93,12 @@ public class ScratchSprite extends ScratchObj {
 		img.addChild(geomShape);
 		showCostume(0);
 		setScratchXY(0, 0);
+	}
+	
+	// For Game Snap
+	override public function setupAsTemplateObj():void {
+		super.setupAsTemplateObj();
+		updateBubble();
 	}
 
 	private function initMedia():void {
@@ -111,6 +133,10 @@ public class ScratchSprite extends ScratchObj {
 		// the clone block and duplicate().
 		var i:int;
 
+		// For Game Snap, copy template object info
+		basedOnTemplateObj = spr.basedOnTemplateObj;
+		isTemplateObj = spr.isTemplateObj;
+			
 		// Copy variables and lists.
 		for (i = 0; i < spr.variables.length; i++) {
 			var v:Variable = spr.variables[i];
@@ -151,6 +177,10 @@ public class ScratchSprite extends ScratchObj {
 		isDraggable = spr.isDraggable;
 		indexInLibrary = 100000;
 
+		// For Game Snap
+		lockedObj = spr.lockedObj;
+		setPassthroughMouseClicks(spr.getPassthroughMouseClicks());
+		
 		penIsDown = spr.penIsDown;
 		penWidth = spr.penWidth;
 		penHue = spr.penHue;
@@ -455,7 +485,15 @@ public class ScratchSprite extends ScratchObj {
 
 	/* Dragging */
 
-	public function objToGrab(evt:MouseEvent):ScratchSprite { return this } // allow dragging
+	public function objToGrab(evt:MouseEvent):ScratchSprite {
+		// For Game Snap, check if this sprite is locked first
+		if(!lockedObj) {
+			return this;
+		}
+		
+		// For Game Snap: This object is locked
+		return null;
+	}
 
 	/* Menu */
 
@@ -465,6 +503,22 @@ public class ScratchSprite extends ScratchObj {
 		m.addLine();
 		m.addItem('duplicate', duplicateSprite);
 		m.addItem('delete', deleteSprite);
+		
+		// For Game Snap
+		if(!isTemplateObj) {
+			m.addLine();
+			if(!basedOnTemplateObj) {
+				m.addItem('base on template sprite', baseOnTemplateSprite);
+			}
+			else {
+				m.addItem('remove template sprite link', removeTemplateSpriteLink);
+			}
+		}
+		else {
+			m.addLine();
+			m.addItem('new sprite', makeNewSpriteFromTemplate);
+		}
+		
 		m.addLine();
 		m.addItem('save to local file', saveToLocalFile);
 		return m;
@@ -481,6 +535,30 @@ public class ScratchSprite extends ScratchObj {
 	private function growSprite():void { setSize(getSize() + 5); Scratch.app.updatePalette() }
 	private function shrinkSprite():void { setSize(getSize() - 5); Scratch.app.updatePalette() }
 
+	// For Game Snap
+	public function baseOnTemplateSprite():void {
+		function chosen(o:ScratchObj):void {
+			if(o != null) {
+				basedOnTemplateObj = o;
+			}
+		}
+		
+		var dialog:TemplateObjDialog = new TemplateObjDialog(chosen);
+	}
+	
+	// For Game Snap
+	public function removeTemplateSpriteLink():void {
+		if(basedOnTemplateObj) {
+			// Remove the link to the template object
+			basedOnTemplateObj = null;
+			
+			// Update the sprite's info
+			if(this == Designer.dapp.viewedObj()) {
+				Designer.dapp.selectSprite(this);
+			}
+		}
+	}
+	
 	public function duplicateSprite(grab:Boolean = false):void {
 		var dup:ScratchSprite = duplicate();
 		dup.objName = unusedSpriteName(objName);
@@ -500,6 +578,43 @@ public class ScratchSprite extends ScratchObj {
 		}
 	}
 
+	// For Game Snap
+	public function makeNewSpriteFromTemplate():void {
+		var dup:ScratchSprite = duplicate();
+		
+		// If there is a "T_" at the start of the template's name, then remove it
+		var name:String = objName;
+		if(name.indexOf("T_") == 0 || name.indexOf("t_") == 0) {
+			name = name.slice(2);
+		}
+		dup.objName = unusedSpriteName(name);
+		dup.isTemplateObj = false;
+		
+		// Remove any scripts so we don't duplicate what is on the template
+		dup.scripts.splice(0);
+		
+		// Make this new sprite based on the template sprite
+		dup.basedOnTemplateObj = this;
+		
+		// Force visibility as template sprites are always hidden
+		dup.visible = true;
+		
+		dup.setScratchXY(
+			int(Math.random() * 400) - 200,
+			int(Math.random() * 300) - 150);
+		
+		if (parent != null) {
+			parent.addChild(dup);
+			var dapp:Designer = Designer.dapp;
+			if (dapp) {
+				dapp.setSaveNeeded();
+				dapp.updateSpriteLibrary();
+				dapp.selectSprite(dup);
+				dapp.libraryPart.selectTab('sprites');
+			}
+		}
+	}
+	
 	public function showDetails():void {
 		var app:Scratch = Scratch.app;
 		app.selectSprite(this);
@@ -645,6 +760,12 @@ public class ScratchSprite extends ScratchObj {
 	/* Saving */
 
 	public override function writeJSON(json:util.JSON):void {
+		// For Game Snap, write out the Game Snap version if saving a single sprite
+		if(ProjectIO.savingSingleSprite) {
+			json.writeKeyValue('gameSnapFileVersion', Scratch.gameSnapFileVersion);
+		}
+		
+		// Continue with the rest of the sprite saving
 		super.writeJSON(json);
 		json.writeKeyValue('scratchX', scratchX);
 		json.writeKeyValue('scratchY', scratchY);
@@ -666,7 +787,15 @@ public class ScratchSprite extends ScratchObj {
 		rotationStyle = jsonObj.rotationStyle;
 		isDraggable = jsonObj.isDraggable;
 		indexInLibrary = jsonObj.indexInLibrary;
-		visible = jsonObj.visible;
+		
+		// For Game Snap, automatically set the visibility of template objects, and read for the rest
+		if(!isTemplateObj) {
+			visible = jsonObj.visible;
+		}
+		else {
+			// A template object
+			visible = false;
+		}
 		spriteInfo = jsonObj.spriteInfo ? jsonObj.spriteInfo : {};
 		setScratchXY(scratchX, scratchY);
 	}

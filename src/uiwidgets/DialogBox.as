@@ -18,12 +18,23 @@
  */
 
 package uiwidgets {
-	import flash.display.*;
-	import flash.events.*;
+	import flash.display.DisplayObject;
+	import flash.display.Graphics;
+	import flash.display.Sprite;
+	import flash.display.Stage;
+	import flash.events.Event;
+	import flash.events.FocusEvent;
+	import flash.events.KeyboardEvent;
+	import flash.events.MouseEvent;
 	import flash.filters.DropShadowFilter;
-	import flash.text.*;
+	import flash.text.TextField;
+	import flash.text.TextFieldAutoSize;
+	import flash.text.TextFieldType;
+	import flash.text.TextFormat;
 	import flash.utils.Dictionary;
+	
 	import translation.Translator;
+	
 	import ui.parts.UIPart;
 
 public class DialogBox extends Sprite {
@@ -65,6 +76,18 @@ public class DialogBox extends Sprite {
 		d.addTitle(question);
 		d.addField('answer', 120, defaultAnswer, false);
 		d.addButton('OK', d.accept);
+		if (context) d.updateContext(context);
+		d.showOnStage(stage ? stage : Scratch.app.stage);
+	}
+	
+	// For Game Snap
+	public static function askOkCancel(question:String, defaultAnswer:String, answerWidth:int = 120, stage:Stage = null, okFunction:Function = null, cancelFunction:Function = null, context:Dictionary = null):void {
+		function doneOK():void { if (okFunction != null) okFunction(d.fields['answer'].text) }
+		function doneCancel():void { if (cancelFunction != null) cancelFunction(d.fields['answer'].text) }
+		var d:DialogBox = new DialogBox(doneOK, doneCancel);
+		d.addTitle(question);
+		d.addField('answer', answerWidth, defaultAnswer, false);
+		d.addAcceptCancelButtons('OK');
 		if (context) d.updateContext(context);
 		d.showOnStage(stage ? stage : Scratch.app.stage);
 	}
@@ -295,9 +318,17 @@ public class DialogBox extends Sprite {
 		}
 		// widget
 		if (widget != null) {
-			widget.x = (width - widget.width) / 2;
-			widget.y = fieldY; // (title != null) ? title.y + title.height + 10 : 10;
-			fieldY = widget.y + widget.height + 15;
+			var scrollFrame:ScrollFrame = widget as ScrollFrame;
+			if(!scrollFrame) {
+				widget.x = (width - widget.width) / 2;
+				widget.y = fieldY; // (title != null) ? title.y + title.height + 10 : 10;
+				fieldY = widget.y + widget.height + 15;
+			}
+			else {
+				widget.x = (width - scrollFrame.visibleW()) / 2;
+				widget.y = fieldY; // (title != null) ? title.y + title.height + 10 : 10;
+				fieldY = widget.y + scrollFrame.visibleH() + 15;
+			}
 		}
 		// boolean fields
 		for (i = 0; i < booleanLabelsAndFields.length; i++) {
@@ -360,8 +391,15 @@ public class DialogBox extends Sprite {
 		w = Math.max(w, maxLabelWidth + maxFieldWidth + 5);
 		// widget
 		if (widget != null) {
-			w = Math.max(w, widget.width);
-			h += 10 + widget.height;
+			var scrollFrame:ScrollFrame = widget as ScrollFrame;
+			if(!scrollFrame) {
+				w = Math.max(w, widget.width);
+				h += 10 + widget.height;
+			}
+			else {
+				w = Math.max(w, scrollFrame.visibleW());
+				h += 10 + scrollFrame.visibleH();
+			}
 		}
 		// text lines
 		for each (var line:TextField in textLines) {

@@ -43,6 +43,7 @@ public class SensingPrims {
 	public function addPrimsTo(primTable:Dictionary):void {
 		// sensing
 		primTable['touching:']			= primTouching;
+		primTable['touchingString:']	= primTouching;		// For Game Snap
 		primTable['touchingColor:']		= primTouchingColor;
 		primTable['color:sees:']		= primColorSees;
 
@@ -56,7 +57,9 @@ public class SensingPrims {
 		primTable['timerReset']			= function(b:*):* { app.runtime.timerReset() };
 		primTable['keyPressed:']		= primKeyPressed;
 		primTable['distanceTo:']		= primDistanceTo;
+		primTable['distanceToString:']	= primDistanceTo;	// For Game Snap
 		primTable['getAttribute:of:']	= primGetAttribute;
+		primTable['getAttribute:ofString:']	= primGetAttribute;	// For Game Snap
 		primTable['soundLevel']			= function(b:*):* { return app.runtime.soundLevel() };
 		primTable['isLoud']				= function(b:*):* { return app.runtime.isLoud() };
 		primTable['timestamp']			= primTimestamp;

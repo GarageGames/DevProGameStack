@@ -23,14 +23,27 @@
 // This part shows information about the currently selected object (the stage or a sprite).
 
 package ui.parts {
-	import flash.display.*;
-	import flash.events.*;
-	import flash.geom.*;
-	import flash.text.*;
-	import scratch.*;
+	import flash.display.Bitmap;
+	import flash.display.DisplayObject;
+	import flash.display.Graphics;
+	import flash.display.Shape;
+	import flash.display.Sprite;
+	import flash.events.MouseEvent;
+	import flash.geom.Point;
+	import flash.text.TextField;
+	import flash.text.TextFormat;
+	
+	import scratch.ScratchCostume;
+	import scratch.ScratchObj;
+	import scratch.ScratchSprite;
+	
 	import translation.Translator;
-	import uiwidgets.*;
+	
+	import uiwidgets.EditableLabel;
+	import uiwidgets.IconButton;
+	
 	import util.DragClient;
+	
 	import watchers.ListWatcher;
 
 public class SpriteInfoPart extends UIPart implements DragClient {
@@ -63,6 +76,16 @@ public class SpriteInfoPart extends UIPart implements DragClient {
 	private var showSpriteLabel:TextField;
 	private var showSpriteButton:IconButton;
 
+	// For Game Snap
+	private var lockedObjLabel:TextField;
+	private var lockedObjButton:IconButton;
+	private var passthroughMouseClicksLabel:TextField;
+	private var passthroughMouseClicksButton:IconButton;
+	private var basedOnLabel:TextField;
+	private var basedOnName:TextField;
+	private var lastBasedOnName:String;
+	private var isTemplateSpriteLabel:TextField;
+	
 	private var lastX:Number, lastY:Number, lastDirection:Number, lastRotationStyle:String;
 	private var lastSrcImg:DisplayObject;
 
@@ -75,14 +98,18 @@ public class SpriteInfoPart extends UIPart implements DragClient {
 	}
 
 	public static function strings():Array {
-		return ['direction:', 'rotation style:', 'can drag in player:', 'show:'];
+		return ['direction:', 'rotation style:', 'can drag in player:', 'locked in editor:', 'pass through mouse clicks:', 'show:', 'based on:', 'is template sprite'];	// Added 'locked in editor', 'pass through mouse clicks', 'based on:', 'is template sprite' for Game Snap
 	}
 
 	public function updateTranslation():void {
 		dirLabel.text = Translator.map('direction:');
 		rotationStyleLabel.text = Translator.map('rotation style:');
 		draggableLabel.text = Translator.map('can drag in player:');
+		lockedObjLabel.text = Translator.map('locked in editor:');	// For Game Snap
+		passthroughMouseClicksLabel.text = Translator.map('pass through mouse clicks:');	// For Game Snap
 		showSpriteLabel.text = Translator.map('show:');
+		basedOnLabel.text = Translator.map('based on:');	// For Game Snap
+		isTemplateSpriteLabel.text = Translator.map('is template sprite');	// For Game Snap
 		if (app.viewedObj()) refresh();
 	}
 
@@ -135,10 +162,26 @@ public class SpriteInfoPart extends UIPart implements DragClient {
 		addChild(draggableLabel = makeLabel('', readoutLabelFormat));
 		addChild(draggableButton = new IconButton(toggleLock, 'checkbox'));
 		draggableButton.disableMouseover();
+		
+		// For Game Snap
+		addChild(lockedObjLabel = makeLabel('', readoutLabelFormat));
+		addChild(lockedObjButton = new IconButton(toggleLockedObj, 'checkbox'));
+		lockedObjButton.disableMouseover();
+		
+		// For Game Snap
+		addChild(passthroughMouseClicksLabel = makeLabel('', readoutLabelFormat));
+		addChild(passthroughMouseClicksButton = new IconButton(togglePassthroughMouseClicks, 'checkbox'));
+		passthroughMouseClicksButton.disableMouseover();
 
 		addChild(showSpriteLabel = makeLabel('', readoutLabelFormat));
 		addChild(showSpriteButton = new IconButton(toggleShowSprite, 'checkbox'));
 		showSpriteButton.disableMouseover();
+		
+		// For Game Snap
+		addChild(basedOnLabel = makeLabel('', readoutLabelFormat));
+		addChild(basedOnName = makeLabel('', readoutLabelFormat));
+		addChild(isTemplateSpriteLabel = makeLabel('', readoutLabelFormat));
+		isTemplateSpriteLabel.visible = false;
 	}
 
 	private function layoutFullsize():void {
@@ -191,11 +234,34 @@ public class SpriteInfoPart extends UIPart implements DragClient {
 		draggableButton.x = draggableLabel.x + draggableLabel.textWidth + 10;
 		draggableButton.y = nextY + 4;
 
+		// For Game Snap
+		nextY += 22;
+		lockedObjLabel.x = left;
+		lockedObjLabel.y = nextY;
+		lockedObjButton.x = lockedObjLabel.x + lockedObjLabel.textWidth + 10;
+		lockedObjButton.y = nextY + 4;
+		
+		// For Game Snap
+		nextY += 22;
+		passthroughMouseClicksLabel.x = left;
+		passthroughMouseClicksLabel.y = nextY;
+		passthroughMouseClicksButton.x = passthroughMouseClicksLabel.x + passthroughMouseClicksLabel.textWidth + 10;
+		passthroughMouseClicksButton.y = nextY + 4;
+
 		nextY += 22;
 		showSpriteLabel.x = left;
 		showSpriteLabel.y = nextY;
 		showSpriteButton.x = showSpriteLabel.x + showSpriteLabel.textWidth + 10;
 		showSpriteButton.y = nextY + 4;
+		
+		// For Game Snap
+		nextY += 22;
+		basedOnLabel.x = left;
+		basedOnLabel.y = nextY;
+		basedOnName.x = basedOnLabel.x + basedOnLabel.textWidth + 10;
+		basedOnName.y = nextY;
+		isTemplateSpriteLabel.x = showSpriteLabel.x;
+		isTemplateSpriteLabel.y = showSpriteLabel.y;
 	}
 
 	private function layoutCompact():void {
@@ -242,12 +308,35 @@ public class SpriteInfoPart extends UIPart implements DragClient {
 		draggableLabel.y = nextY;
 		draggableButton.x = draggableLabel.x + draggableLabel.textWidth + 10;
 		draggableButton.y = nextY + 4;
+		
+		// For Game Snap
+		nextY += 22;
+		lockedObjLabel.x = left;
+		lockedObjLabel.y = nextY;
+		lockedObjButton.x = lockedObjLabel.x + lockedObjLabel.textWidth + 10;
+		lockedObjButton.y = nextY + 4;
+		
+		// For Game Snap
+		nextY += 22;
+		passthroughMouseClicksLabel.x = left;
+		passthroughMouseClicksLabel.y = nextY;
+		passthroughMouseClicksButton.x = passthroughMouseClicksLabel.x + passthroughMouseClicksLabel.textWidth + 10;
+		passthroughMouseClicksButton.y = nextY + 4;
 
 		nextY += 22;
 		showSpriteLabel.x = left;
 		showSpriteLabel.y = nextY;
 		showSpriteButton.x = showSpriteLabel.x + showSpriteLabel.textWidth + 10;
 		showSpriteButton.y = nextY + 4;
+		
+		// For Game Snap
+		nextY += 22;
+		basedOnLabel.x = left;
+		basedOnLabel.y = nextY;
+		basedOnName.x = basedOnLabel.x + basedOnLabel.textWidth + 10;
+		basedOnName.y = nextY;
+		isTemplateSpriteLabel.x = showSpriteLabel.x;
+		isTemplateSpriteLabel.y = showSpriteLabel.y;
 	}
 
 	private function closeSpriteInfo(ignore:*):void {
@@ -287,7 +376,25 @@ public class SpriteInfoPart extends UIPart implements DragClient {
 			app.setSaveNeeded();
 		}
 	}
+	
+	// For Game Snap
+	private function toggleLockedObj(b:IconButton):void {
+		var spr:ScratchSprite = ScratchSprite(app.viewedObj());
+		if (spr) {
+			spr.lockedObj = b.isOn();
+			app.setSaveNeeded();
+		}
+	}
 
+	// For Game Snap
+	private function togglePassthroughMouseClicks(b:IconButton):void {
+		var spr:ScratchSprite = ScratchSprite(app.viewedObj());
+		if (spr) {
+			spr.setPassthroughMouseClicks(b.isOn());
+			app.setSaveNeeded();
+		}
+	}
+	
 	private function toggleShowSprite(b:IconButton):void {
 		var spr:ScratchSprite = ScratchSprite(app.viewedObj());
 		if (spr) {
@@ -321,7 +428,38 @@ public class SpriteInfoPart extends UIPart implements DragClient {
 			lastRotationStyle = spr.rotationStyle;
 		}
 		draggableButton.setOn(spr.isDraggable);
+		lockedObjButton.setOn(spr.lockedObj);	// For Game Snap
+		passthroughMouseClicksButton.setOn(spr.getPassthroughMouseClicks());	// For Game Snap
 		showSpriteButton.setOn(spr.visible);
+		
+		// For Game Snap
+		if(spr.isTemplateObj) {
+			if(!isTemplateSpriteLabel.visible) {
+				isTemplateSpriteLabel.visible = true;
+				basedOnLabel.visible = false;
+				basedOnName.visible = false;
+				showSpriteLabel.visible = false;
+				showSpriteButton.visible = false;
+			}
+		}
+		else if(!spr.basedOnTemplateObj && (lastBasedOnName != 'None' || isTemplateSpriteLabel.visible)) {
+			lastBasedOnName = 'None';
+			basedOnName.text = lastBasedOnName;
+			isTemplateSpriteLabel.visible = false;
+			basedOnLabel.visible = true;
+			basedOnName.visible = true;
+			showSpriteLabel.visible = true;
+			showSpriteButton.visible = true;
+		}
+		else if(spr.basedOnTemplateObj && (lastBasedOnName != spr.basedOnTemplateObj.objName || isTemplateSpriteLabel.visible)) {
+			lastBasedOnName = spr.basedOnTemplateObj.objName;
+			basedOnName.text = lastBasedOnName;
+			isTemplateSpriteLabel.visible = false;
+			basedOnLabel.visible = true;
+			basedOnName.visible = true;
+			showSpriteLabel.visible = true;
+			showSpriteButton.visible = true;
+		}
 	}
 
 	private function drawDirWheel(dir:Number):void {

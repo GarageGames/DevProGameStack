@@ -223,9 +223,11 @@ public class ImagesPart extends UIPart {
 		// Switch editors based on flag. Do nothing if editor is already of the correct type.
 		// NOTE: After switching editors, the caller must install costume and other state in the new editor.
 		var oldSettings:DrawProperties, oldZoomAndScroll:Array;
+		var targetCostume:ScratchCostume;	// For Game Snap, added to fix Scratch bug with vector->bitmap conversion
 		if (editor) {
 			oldSettings = editor.getShapeProps();
 			oldZoomAndScroll = editor.getWorkArea().getZoomAndScroll();
+			targetCostume = editor.targetCostume;	// For Game Snap, added to fix Scratch bug with vector->bitmap conversion
 		}
 		if (flag) {
 			if (editor is BitmapEdit) return;
@@ -239,6 +241,7 @@ public class ImagesPart extends UIPart {
 		if (oldSettings) {
 			editor.setShapeProps(oldSettings);
 			editor.getWorkArea().setZoomAndScroll([oldZoomAndScroll[0], 0.5, 0.5]);
+			editor.targetCostume = targetCostume;	// For Game Snap, added to fix Scratch bug with vector->bitmap conversion
 		}
 		editor.registerToolButton('setCenter', centerButton);
 		fixEditorLayout();

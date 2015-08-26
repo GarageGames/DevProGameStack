@@ -42,28 +42,33 @@ public class TabsPart extends UIPart {
 	// For Game Snap
 	private var globalTab:IconButton;
 	private var globalTabDisplayObject:DisplayObject;
+	private var designTab:IconButton;
 
 	public function TabsPart(app:Scratch) {
 		function selectScripts(b:IconButton):void { app.setTab('scripts') }
 		function selectImages(b:IconButton):void { app.setTab('images') }
 		function selectSounds(b:IconButton):void { app.setTab('sounds') }
+		function selectDesign(b:IconButton):void { app.setTab('design') }
 		function selectGlobal(b:IconButton):void { app.setTab('global') }
 
 		this.app = app;
 		scriptsTab = makeTab('Scripts', selectScripts);
 		imagesTab = makeTab('Images', selectImages); // changed to 'Costumes' or 'Scenes' by refresh()
 		soundsTab = makeTab('Sounds', selectSounds);
+		designTab = makeTab('Design', selectDesign);
 		globalTab = makeTab('Global', selectGlobal);
+		
 		addChild(scriptsTab);
 		addChild(imagesTab);
 		addChild(soundsTab);
+		addChild(designTab);
 		globalTabDisplayObject = addChild(globalTab);
 		globalTabDisplayObject.visible = false;
 		scriptsTab.turnOn();
 	}
 
 	public static function strings():Array {
-		return ['Scripts', 'Costumes', 'Backdrops', 'Sounds', 'Global'];
+		return ['Scripts', 'Costumes', 'Backdrops', 'Sounds', 'Design', 'Global'];
 	}
 
 	public function refresh():void {
@@ -76,10 +81,13 @@ public class TabsPart extends UIPart {
 		scriptsTab.turnOff();
 		imagesTab.turnOff();
 		soundsTab.turnOff();
+		designTab.turnOff();
 		globalTab.turnOff();
+		
 		if (tabName == 'scripts') scriptsTab.turnOn();
 		if (tabName == 'images') imagesTab.turnOn();
 		if (tabName == 'sounds') soundsTab.turnOn();
+		if (tabName == 'design') designTab.turnOn();
 		if (tabName == 'global') globalTab.turnOn();
 	}
 
@@ -90,7 +98,9 @@ public class TabsPart extends UIPart {
 		imagesTab.y = 0;
 		soundsTab.x = imagesTab.x + imagesTab.width + 1;
 		soundsTab.y = 0;
-		globalTab.x = soundsTab.x + soundsTab.width + 1;
+		designTab.x = soundsTab.x + soundsTab.width + 1;
+		designTab.y = 0;
+		globalTab.x = designTab.x + designTab.width + 1;
 		globalTab.y = 0;
 		this.w = globalTab.x + globalTab.width; // Original code: soundsTab.x + soundsTab.width;
 		this.h = scriptsTab.height;
@@ -99,6 +109,7 @@ public class TabsPart extends UIPart {
 	public function updateTranslation():void {
 		scriptsTab.setImage(makeTabImg('Scripts', true), makeTabImg('Scripts', false));
 		soundsTab.setImage(makeTabImg('Sounds', true), makeTabImg('Sounds', false));
+		designTab.setImage(makeTabImg('Design', true), makeTabImg('Design', false));
 		globalTab.setImage(makeTabImg('Global', true), makeTabImg('Global', false));
 		refresh(); // updates imagesTabs
 	}

@@ -18,16 +18,32 @@
  */
 
 package watchers {
-	import flash.display.*;
-	import flash.events.*;
-	import flash.net.*;
-	import flash.text.*;
-	import flash.utils.*;
+	import flash.display.DisplayObject;
+	import flash.display.Graphics;
+	import flash.display.Shape;
+	import flash.display.Sprite;
+	import flash.events.Event;
+	import flash.events.FocusEvent;
+	import flash.events.KeyboardEvent;
+	import flash.events.MouseEvent;
+	import flash.net.FileReference;
+	import flash.text.TextField;
+	import flash.text.TextFormat;
+	import flash.utils.getTimer;
+	
 	import interpreter.Interpreter;
+	
 	import scratch.ScratchObj;
+	
 	import translation.Translator;
+	
+	import uiwidgets.DialogBox;
+	import uiwidgets.IconButton;
+	import uiwidgets.Menu;
+	import uiwidgets.ResizeableFrame;
+	import uiwidgets.Scrollbar;
+	
 	import util.JSON;
-	import uiwidgets.*;
 
 public class ListWatcher extends Sprite {
 
@@ -61,6 +77,12 @@ public class ListWatcher extends Sprite {
 	private var contentsChanged:Boolean;
 	private var isIdle:Boolean;
 	private var limitedView:Boolean;
+	
+	// For Game Snap
+	public var designTabListWatcher:Boolean = false;
+	public var pointerToDesignTabListWatcher:ListWatcher = null;
+	public var pointerToOriginalListWatcher:ListWatcher = null;
+	protected var beingUpdateBySisterList = false;
 
 	public function ListWatcher(listName:String = 'List Title', contents:Array = null, target:ScratchObj = null, limitView:Boolean = false) {
 		this.listName = listName;
@@ -103,6 +125,88 @@ public class ListWatcher extends Sprite {
 			'Which column do you want to import'];
 	}
 
+	// For Game Snap
+	public function connectToDesignTabListWatcher(designTabList:ListWatcher):void {
+		pointerToDesignTabListWatcher = designTabList;
+		designTabList.pointerToOriginalListWatcher = this;
+	}
+	
+	// For Game Snap
+	public function connectToOriginalListWatcher(originalList:ListWatcher):void {
+		pointerToOriginalListWatcher = originalList;
+		originalList.pointerToDesignTabListWatcher = this;
+	}
+
+	// For Game Snap
+	public function clearDesignTabConnection():void {
+		if(pointerToDesignTabListWatcher != null) {
+			pointerToDesignTabListWatcher.pointerToOriginalListWatcher = null;
+			pointerToDesignTabListWatcher = null;
+		}
+	}
+
+	// For Game Snap
+	public function clearOriginalConnection():void {
+		if(pointerToDesignTabListWatcher != null) {
+			pointerToDesignTabListWatcher.pointerToDesignTabListWatcher = null;
+			pointerToDesignTabListWatcher = null;
+		}
+	}
+	
+	// For Game Snap, update a connected design tab list, if any
+	public function updateDesignTabConnection():void {
+		if(pointerToDesignTabListWatcher == null) {
+			return;
+		}
+		
+		// Don't update a sister list if we're being updated from it (prevent recursion)
+		if(beingUpdateBySisterList) {
+			return;
+		}
+		
+		pointerToDesignTabListWatcher.beingUpdateBySisterList = true;
+
+		pointerToDesignTabListWatcher.contents = contents;
+		pointerToDesignTabListWatcher.updateTitle();
+		pointerToDesignTabListWatcher.updateElementCount();
+		pointerToDesignTabListWatcher.prepareToShow();
+		pointerToDesignTabListWatcher.fixLayout();
+
+		pointerToDesignTabListWatcher.beingUpdateBySisterList = false;
+}
+	
+	// For Game Snap, update a connect list from this Design tab list
+	public function updateOriginalConnection():void {
+		if(pointerToOriginalListWatcher == null) {
+			return;
+		}
+		
+		// Don't update a sister list if we're being updated from it (prevent recursion)
+		if(beingUpdateBySisterList) {
+			return;
+		}
+		
+		pointerToOriginalListWatcher.beingUpdateBySisterList = true;
+		
+		pointerToOriginalListWatcher.contents = contents;
+		pointerToOriginalListWatcher.updateTitle();
+		pointerToOriginalListWatcher.updateElementCount();
+		pointerToOriginalListWatcher.prepareToShow();
+		pointerToOriginalListWatcher.fixLayout();
+		
+		pointerToOriginalListWatcher.beingUpdateBySisterList = false;
+	}
+	
+	// For Game Snap, update the sister list, if any.  ie: a Design tab list
+	public function updateSisterList():void {
+		if(designTabListWatcher) {
+			updateOriginalConnection();
+		}
+		else {
+			updateDesignTabConnection();
+		}
+	}
+	
 	public function toggleLimitedView(limitView:Boolean):void {
 		limitedView = limitView;
 	}
@@ -122,10 +226,22 @@ public class ListWatcher extends Sprite {
 
 	public function menu(evt:MouseEvent):Menu {
 		var m:Menu = new Menu();
-		m.addItem('import', importList);
-		m.addItem('export', exportList);
-		m.addLine();
-		m.addItem('hide', hide);
+		// For Game Snap, don't allow import or export on the Design tab
+		if(!designTabListWatcher) {
+			m.addItem('import', importList);
+			m.addItem('export', exportList);
+			m.addLine();
+			
+		}
+		
+		// For Game Snap, change the name of the 'hide' menu item if it is on the Design tab
+		if(designTabListWatcher) {
+			m.addItem('remove from Design tab', hide);
+		}
+		else {
+			// Original code
+			m.addItem('hide', hide);
+		}
 		return m;
 	}
 
@@ -148,8 +264,20 @@ public class ListWatcher extends Sprite {
 	}
 
 	private function hide():void {
-		visible = false;
-		Scratch.app.updatePalette(false);
+		// For Game Snap, if this is on the Design tab, hiding removes the list completely
+		if(designTabListWatcher) {
+			if(pointerToOriginalListWatcher != null) {
+				pointerToOriginalListWatcher.pointerToDesignTabListWatcher = null;
+				pointerToOriginalListWatcher = null;
+			}
+			visible = false;
+			Designer.dapp.designTabPart.removeListWatcher(this);
+		}
+		else {
+			// Original code here
+			visible = false;
+			Scratch.app.updatePalette(false);
+		}
 	}
 
 	// -----------------------------
@@ -164,14 +292,28 @@ public class ListWatcher extends Sprite {
 	private function importLines(lines:Array):void {
 		function gotColumn(s:String):void {
 			var n:Number = parseInt(s);
-			if (isNaN(n) || (n < 1) || (n > columnCount)) contents = lines;
-			else contents = extractColumn(n, lines, delimiter);
+			if (isNaN(n) || (n < 1) || (n > columnCount)) {
+				contents = lines;
+				
+				// For Game Snap, keep any Design tab list up to date
+				updateDesignTabConnection();
+			}
+			else {
+				contents = extractColumn(n, lines, delimiter);
+				
+				// For Game Snap, keep any Design tab list up to date
+				updateDesignTabConnection();
+			}
 			scrollToIndex(0);
 		}
 		var delimiter:String = guessDelimiter(lines);
 		if (delimiter == null) { // single column (or empty)
 			contents = lines;
 			scrollToIndex(0);
+			
+			// For Game Snap, keep any Design tab list up to date
+			updateDesignTabConnection();
+			
 			return;
 		}
 		var columnCount:int = lines[0].split(delimiter).length;
@@ -228,6 +370,11 @@ public class ListWatcher extends Sprite {
 	}
 
 	public function prepareToShow():void {
+		// For Game Snap, if this is a Design tab list, copy over the contents from the actual list
+		if(designTabListWatcher && pointerToOriginalListWatcher != null) {
+			contents = pointerToOriginalListWatcher.contents;
+		}
+		
 		// Called before showing a list that has been hidden to update its contents.
 		updateTitle();
 		contentsChanged = true;
@@ -459,6 +606,9 @@ public class ListWatcher extends Sprite {
 			tf.y = (visibleHeight - tf.textHeight) / 2;
 			cellPane.addChild(tf);
 		}
+		
+		// For Game Snap, make sure any sister list is also updated
+		updateSisterList();
 	}
 
 	private function cellNumWidth():int {
@@ -536,6 +686,10 @@ public class ListWatcher extends Sprite {
 			var cell:ListCell = visibleCells[i];
 			if (cell.tf == cellContents) {
 				contents[firstVisibleIndex + i] = cellContents.text;
+				
+				// For Game Snap, make sure any sister list is also updated
+				updateSisterList();
+				
 				return;
 			}
 		}
@@ -580,25 +734,56 @@ public class ListWatcher extends Sprite {
 	//------------------------------
 
 	public function writeJSON(json:util.JSON):void {
+		// For Game Snap, write if this is a Design tab list
+		json.writeKeyValue('designTabListWatcher', designTabListWatcher);
+		if(designTabListWatcher) {
+			json.writeKeyValue("target", target.objName);
+		}
 		json.writeKeyValue('listName', listName);
-		json.writeKeyValue('contents', contents);
-		json.writeKeyValue('isPersistent', isPersistent);
 		json.writeKeyValue('x', x);
 		json.writeKeyValue('y', y);
 		json.writeKeyValue('width', width);
 		json.writeKeyValue('height', height);
-		json.writeKeyValue('visible', visible && (parent != null));
+		
+		// For Game Snap, don't write these if it is a Design tab list
+		if(!designTabListWatcher) {
+			json.writeKeyValue('contents', contents);
+			json.writeKeyValue('isPersistent', isPersistent);
+			json.writeKeyValue('visible', visible && (parent != null));
+		}
 	}
 
 	public function readJSON(obj:Object):void {
+		// For Game Snap, read in if this is a Design tab list
+		designTabListWatcher = obj.designTabListWatcher;
+		
 		listName = obj.listName;
-		contents = obj.contents;
-		isPersistent = (obj.isPersistent == undefined) ? false : obj.isPersistent; // handle old projects gracefully
 		x = obj.x;
 		y = obj.y;
 		setWidthHeight(obj.width, obj.height);
-		visible = obj.visible;
-		updateTitleAndContents();
+		
+		// For Game Snap, only load these if not a Design tab list
+		if(!designTabListWatcher) {
+			contents = obj.contents;
+			isPersistent = (obj.isPersistent == undefined) ? false : obj.isPersistent; // handle old projects gracefully
+			visible = obj.visible;
+			
+			updateTitleAndContents();
+		}
+		else {
+			contents = [];
+			target = obj.target;
+			limitedView = false;
+			
+			if(target != null) {
+				var lw:ListWatcher = target.lookupList(listName);
+				if(lw != null) {
+					connectToOriginalListWatcher(lw);
+					lw.updateSisterList(); // Will update this Design tab list watcher with the original's values
+					updateTitleAndContents();
+				}
+			}
+		}
 	}
 
 }}

@@ -30,6 +30,7 @@ public class Variable {
 	public var name:String;
 	public var value:*;
 	public var watcher:*;
+	public var designWatcher:*;	// For Game Snap.  Points to Design tab watcher
 	public var isPersistent:Boolean;
 
 	public function Variable(vName:String, initialValue:*) {

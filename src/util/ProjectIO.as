@@ -27,17 +27,26 @@
 // of separate elements.
 
 package util {
-import flash.display.*;
-import flash.events.*;
+import flash.display.BitmapData;
+import flash.display.Loader;
+import flash.events.Event;
+import flash.events.IOErrorEvent;
 import flash.net.URLLoader;
-import flash.utils.*;
+import flash.utils.ByteArray;
+import flash.utils.Dictionary;
+import flash.utils.setTimeout;
 
-import scratch.*;
+import scratch.ScratchCostume;
+import scratch.ScratchObj;
+import scratch.ScratchSound;
+import scratch.ScratchSprite;
+import scratch.ScratchStage;
 
 import sound.WAVFile;
 import sound.mp3.MP3Loader;
 
-import svgutils.*;
+import svgutils.SVGElement;
+import svgutils.SVGImporter;
 
 import translation.Translator;
 
@@ -49,6 +58,10 @@ public class ProjectIO {
 	protected var images:Array = [];
 	protected var sounds:Array = [];
 
+	// For Game Snap, indicate that a single sprite is being loaded or saved
+	static public var savingSingleSprite:Boolean = false;
+	protected var lastSpriteErrorMessage:String = '';
+	
 	public function ProjectIO(app:Scratch):void {
 		this.app = app;
 	}
@@ -79,11 +92,13 @@ public class ProjectIO {
 	public function encodeSpriteAsZipFile(spr:ScratchSprite):ByteArray {
 		// Encode a sprite into a ByteArray. The format is a ZIP file containing
 		// the JSON sprite data and all images and sounds as files.
+		savingSingleSprite = true; // For Game Snap, track when a single sprite is being saved
 		recordImagesAndSounds([spr], false);
 		var zip:ZipIO = new ZipIO();
 		zip.startWrite();
 		addJSONData('sprite.json', spr, zip);
 		addImagesAndSounds(zip);
+		savingSingleSprite = false; // For Game Snap, track when a single sprite is being saved
 		return zip.endWrite();
 	}
 
@@ -122,7 +137,7 @@ public class ProjectIO {
 		}
 		var spr:ScratchSprite = decodeFromZipFile(zipData) as ScratchSprite;
 		if (spr) decodeAllImages([spr], imagesDecoded, fail);
-		else if (fail != null) fail();
+		else if (fail != null) fail(lastSpriteErrorMessage);
 	}
 
 	private function decodeFromZipFile(zipData:ByteArray):ScratchObj {
@@ -152,26 +167,70 @@ public class ProjectIO {
 			if (fName.slice(-4) == '.mp3') sounds[fIndex] = contents;
 			if (fName.slice(-5) == '.json') jsonData = contents.readUTFBytes(contents.length);
 		}
+		
 		if (jsonData == null) return null;
+		
 		var jsonObj:Object = util.JSON.parse(jsonData);
+		
 		if (jsonObj['children']) { // project JSON
 			var proj:ScratchStage = new ScratchStage();
-			proj.readJSON(jsonObj);
-			if (proj.penLayerID >= 0) proj.penLayerPNG = images[proj.penLayerID]
-			else if (proj.penLayerMD5) proj.penLayerPNG = images[0];
-			installImagesAndSounds(proj.allObjects());
-			return proj;
+			
+			// For Game Snap, make sure we can read the file
+			Scratch.app.gameSnapLastReadFileVersion = jsonObj.gameSnapFileVersion;
+			Scratch.app.gameSnapLastReadSpriteFileVersion = Scratch.app.gameSnapLastReadFileVersion;
+			
+			if(checkGameSnapFileVersion(Scratch.app.gameSnapLastReadFileVersion, true)) {
+				// It is OK to read in the file
+				proj.readJSON(jsonObj);
+				if (proj.penLayerID >= 0) proj.penLayerPNG = images[proj.penLayerID]
+				else if (proj.penLayerMD5) proj.penLayerPNG = images[0];
+				installImagesAndSounds(proj.allObjects());
+				return proj;
+			}
+				
+			return null;
 		}
+		
 		if (jsonObj['direction'] != null) { // sprite JSON
 			var sprite:ScratchSprite = new ScratchSprite();
-			sprite.readJSON(jsonObj);
-			sprite.instantiateFromJSON(app.stagePane)
-			installImagesAndSounds([sprite]);
-			return sprite;
+			
+			// For Game Snap, make sure we can read the file
+			lastSpriteErrorMessage = '';
+			Scratch.app.gameSnapLastReadSpriteFileVersion = jsonObj.gameSnapFileVersion;
+			
+			if(checkGameSnapFileVersion(Scratch.app.gameSnapLastReadSpriteFileVersion, false)) {
+				// It is OK to read in the file
+				sprite.readJSON(jsonObj);
+				sprite.instantiateFromJSON(app.stagePane)
+				installImagesAndSounds([sprite]);
+				return sprite;
+			}
+			
+			lastSpriteErrorMessage = 'Requires newer version of Game Snap';
+			return null;
 		}
+		
 		return null;
 	}
 
+	// For Game Snap, make sure that the requested file version can be read by this
+	// version of Game Snap.
+	// versionToCheck = The version that has been read from the file
+	// diaplayDialog = Show a dialog to the user telling them of the situation
+	// Returns true if this file can be read.
+	public function checkGameSnapFileVersion(versionToCheck:int, displayDialog:Boolean):Boolean {
+		if(versionToCheck > Scratch.gameSnapFileVersion) {
+			// Cannot read this file as it is newer
+			if(displayDialog) {
+				DialogBox.notify('Newer File Version', 'The file you are attempting to load requires a newer version of Game Snap. Nothing has been loaded.', Scratch.app.stage);
+			}
+			return false;
+		}
+
+		// File is OK
+		return true;
+	}
+	
 	private function integerName(s:String):String {
 		// Return the substring of digits preceding the last '.' in the given string.
 		// For example integerName('123.jpg') -> '123'.

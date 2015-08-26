@@ -50,7 +50,9 @@ import filters.FilterPack;
 import translation.Translator;
 
 import ui.media.MediaInfo;
+import ui.parts.DesignTabPart;
 
+import uiwidgets.DialogBox;
 import uiwidgets.Menu;
 
 import util.JSON;
@@ -80,7 +82,7 @@ public class ScratchStage extends ScratchObj {
 	private var video:Video;
 	private var videoAlpha:Number = 0.5;
 	private var flipVideo:Boolean = true;
-
+	
 	public function ScratchStage() {
 		objName = 'Stage';
 		isStage = true;
@@ -200,7 +202,27 @@ public class ScratchStage extends ScratchObj {
 		}
 		return result;
 	}
+	
+	// For Game Snap, returns a list of all regular (non-template) sprites
+	public function regularSprites():Array {
+		var result:Array = [];
+		for (var i:int = 0; i < numChildren; i++) {
+			var o:* = getChildAt(i);
+			if ((o is ScratchSprite) && !o.isClone && !o.isGlobalObj && !o.isTemplateObj) result.push(o);
+		}
+		return result;
+	}
 
+	// For Game Snap, returns a list of all template sprites
+	public function templateSprites():Array {
+		var result:Array = [];
+		for (var i:int = 0; i < numChildren; i++) {
+			var o:* = getChildAt(i);
+			if ((o is ScratchSprite) && !o.isClone && !o.isGlobalObj && o.isTemplateObj) result.push(o);
+		}
+		return result;
+	}
+	
 	// Returns list of all global objects (for Game Snap)
 	public function globalObjs():Array {
 		var result:Array = [];
@@ -826,10 +848,22 @@ public class ScratchStage extends ScratchObj {
 			children.push(gs);
 		}
 		
+		// For Game Snap, write out any template sprites second
+		var templateObjIndex:int = 0;
 		for (var i:int = 0; i < numChildren; i++) {
 			var c:DisplayObject = getChildAt(i);
-			if (((c is ScratchSprite) && !ScratchSprite(c).isClone && !ScratchSprite(c).isGlobalObj)	// Added isGlobal for Game Snap
-				|| (c is Watcher) || (c is ListWatcher)) {
+			if((c is ScratchSprite) && ScratchSprite(c).isTemplateObj) {
+				var to:ScratchObj = c as ScratchObj;
+				to.templateObjIndex = templateObjIndex;
+				templateObjIndex++;
+				children.push(c);
+			}
+		}
+		
+		for (var i:int = 0; i < numChildren; i++) {
+			var c:DisplayObject = getChildAt(i);
+			if (((c is ScratchSprite) && !ScratchSprite(c).isClone && !ScratchSprite(c).isGlobalObj && !ScratchSprite(c).isTemplateObj)	// Added isGlobalObj and isTemplateObj for Game Snap
+				|| (c is Watcher)) { // || (c is ListWatcher && ListWatcher(c).target == this)) {	// For Game Snap, only write out ListWatchers that belong to the stage.  This is to prevent a bug with Scratch.
 				children.push(c);
 			}
 		}
@@ -840,12 +874,21 @@ public class ScratchStage extends ScratchObj {
 			for (i = 0; i < uiLayer.numChildren; i++) {
 				c = uiLayer.getChildAt(i);
 				if (((c is ScratchSprite) && !ScratchSprite(c).isClone)
-						|| (c is Watcher) || (c is ListWatcher)) {
+						|| (c is Watcher)) { // || (c is ListWatcher && ListWatcher(c).target == this)) {	// For Game Snap, only write out ListWatchers that belong to the stage.  This is to prevent a bug with Scratch.
 					children.push(c);
 				}
 			}
 		}
 
+		// For Game Snap, write out any Design tab watchers
+		var dtWatchers:Array = Designer.dapp.designTabPart.watchers();
+		for(i=0; i<dtWatchers.length; i++) {
+			c = dtWatchers[i];
+			if((c is Watcher) || (c is ListWatcher)) {
+				children.push(c);
+			}
+		}
+		
 		// For Game Snap
 		json.writeKeyValue('gameSnapFileVersion', Scratch.gameSnapFileVersion);
 		
@@ -860,6 +903,14 @@ public class ScratchStage extends ScratchObj {
 	public override function readJSON(jsonObj:Object):void {
 		var children:Array, i:int, o:Object;
 
+		// For Game Snap, clear the template object array
+		Scratch.app.runtime.templateObjLoadArray.splice(0);
+		
+		// For Game Snap, clear the Design tab to prepare it for any new watchers
+		if(Designer.dapp) {
+			Designer.dapp.designTabPart.clearAllWatchers();
+		}
+		
 		// read stage fields
 		super.readJSON(jsonObj);
 		penLayerMD5 = jsonObj.penLayerMD5;
@@ -867,9 +918,6 @@ public class ScratchStage extends ScratchObj {
 		if (jsonObj.videoAlpha) videoAlpha = jsonObj.videoAlpha;
 		children = jsonObj.children;
 		info = jsonObj.info;
-
-		// For Game Snap
-		Scratch.app.gameSnapLastReadFileVersion = jsonObj.gameSnapFileVersion;
 
 		// instantiate sprites and record their names
 		var spriteNameMap:Object = new Object();
@@ -881,10 +929,16 @@ public class ScratchStage extends ScratchObj {
 				s.readJSON(o);
 				spriteNameMap[s.objName] = s;
 				children[i] = s;
+				
+				// For Game Snap, record a template sprite
+				if(s.isTemplateObj) {
+					Scratch.app.runtime.templateObjLoadArray.push(s);
+				}
 			}
 		}
 
 		// instantiate Watchers and add all children (sprites and watchers)
+		var designTabListWatchers:Array = [];	// For Game Snap Design tab
 		for (i = 0; i < children.length; i++) {
 			o = children[i];
 			if (o is ScratchSprite) {
@@ -900,7 +954,20 @@ public class ScratchStage extends ScratchObj {
 					}
 					var w:Watcher = new Watcher();
 					w.readJSON(o);
-					addChild(w);
+					
+					// For Game Snap only add to stage if it is not a Design tab watcher.
+					if(!w.designTabWatcher) {
+						addChild(w);
+					}
+				}
+			}
+			else if(o.designTabListWatcher != undefined) { // o is a list watcher record for Game Snap's Design tab
+				o.target = spriteNameMap[o.target]; // update target before instantiating
+				if(o.target) {
+					// Push this list watcher into the array for processing after all ScratchObj's have
+					// had their lists processed below.  Without delaying this, we'll not be able to find
+					// the target's list to attach this Design tab watcher to.
+					designTabListWatchers.push(o);
 				}
 			}
 		}
@@ -908,6 +975,15 @@ public class ScratchStage extends ScratchObj {
 		// instantiate lists, variables, scripts, costumes, and sounds
 		for each (var scratchObj:ScratchObj in allObjects()) {
 			scratchObj.instantiateFromJSON(this);
+		}
+		
+		// For Game Snap, process all Design tab list watchers
+		for (i = 0; i < designTabListWatchers.length; i++) {
+			o = designTabListWatchers[i];
+			var lw:ListWatcher = new ListWatcher();
+			lw.readJSON(o);
+			lw.prepareToShow();
+			Designer.dapp.designTabPart.addListWatcher(lw);
 		}
 		
 		// For Game Snap: Create a global sprite if one doesn't exist
@@ -929,6 +1005,9 @@ public class ScratchStage extends ScratchObj {
 				addChild(gs);
 			}
 		}
+		
+		// For Game Snap, clear the template object array as we no longer need it
+		Scratch.app.runtime.templateObjLoadArray.splice(0);
 	}
 
 	public override function getSummary():String {

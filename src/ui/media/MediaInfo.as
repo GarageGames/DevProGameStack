@@ -26,17 +26,35 @@
 //	* to drag between the backpack and the media pane
 
 package ui.media {
-	import flash.display.*;
-	import flash.events.*;
-	import flash.geom.*;
-	import flash.net.*;
-	import flash.text.*;
+	import flash.display.Bitmap;
+	import flash.display.BitmapData;
+	import flash.display.DisplayObject;
+	import flash.display.Graphics;
+	import flash.display.Shape;
+	import flash.display.Sprite;
+	import flash.events.MouseEvent;
+	import flash.geom.Matrix;
+	import flash.geom.Rectangle;
+	import flash.net.FileReference;
+	import flash.text.TextField;
+	
 	import assets.Resources;
-	import blocks.*;
-	import scratch.*;
+	
+	import blocks.Block;
+	import blocks.BlockIO;
+	
+	import scratch.ScratchCostume;
+	import scratch.ScratchObj;
+	import scratch.ScratchSound;
+	import scratch.ScratchSprite;
+	
 	import translation.Translator;
-	import ui.parts.*;
-	import uiwidgets.*;
+	
+	import ui.parts.UIPart;
+	
+	import uiwidgets.DialogBox;
+	import uiwidgets.IconButton;
+	import uiwidgets.Menu;
 
 public class MediaInfo extends Sprite {
 
@@ -66,6 +84,10 @@ public class MediaInfo extends Sprite {
 	private var info:TextField;
 	private var deleteButton:IconButton;
 
+	// For Game Snap
+	public var allowGrabbing:Boolean = true;
+	public var clickCallback:Function;
+	
 	public function MediaInfo(obj:*, owningObj:ScratchObj = null) {
 		owner = owningObj;
 		mycostume = obj as ScratchCostume;
@@ -248,6 +270,11 @@ public class MediaInfo extends Sprite {
 	//------------------------------
 
 	public function objToGrab(evt:MouseEvent):* {
+		// Added this check for Game Snap
+		if(!allowGrabbing) {
+			return null;
+		}
+		
 		var result:MediaInfo = Scratch.app.createMediaInfo({
 			type: objType,
 			name: objName,
@@ -361,6 +388,11 @@ public class MediaInfo extends Sprite {
 				app.selectCostume();
 			}
 			if (mysound) app.selectSound(mysound);
+			
+			// For Game Snap
+			if(clickCallback != null) {
+				clickCallback(this);
+			}
 		}
 	}
 
@@ -378,6 +410,12 @@ public class MediaInfo extends Sprite {
 	protected function addMenuItems(m:Menu):void {
 		if (!getBackpack()) m.addItem('duplicate', duplicateMe);
 		m.addItem('delete', deleteMe);
+		
+		// Added for Game Snap
+		if (mycostume || mysound) {
+			m.addItem('rename', renameMe);
+		}
+		
 		m.addLine();
 		if (mycostume) {
 			m.addItem('save to local file', exportCostume);
@@ -408,6 +446,25 @@ public class MediaInfo extends Sprite {
 		}
 	}
 
+	// Added for Game Snap
+	protected function renameMe():void {
+		function changeName(s:String):void {
+			if(s.length > 0) {
+				objName = s;
+				if(mycostume) {
+					mycostume.costumeName = s;
+				}
+				else if(mysound) {
+					mysound.soundName = s;
+				}
+				updateLabelAndInfo(false);
+			}
+		}
+		if(owner) {
+			DialogBox.askOkCancel('Please enter a new name', objName, 200, Scratch.app.stage, changeName);
+		}
+	}
+	
 	private function exportCostume():void {
 		if (!mycostume) return;
 		mycostume.prepareToSave();

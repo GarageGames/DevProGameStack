@@ -40,8 +40,12 @@ public class LooksPrims {
 
 	public function addPrimsTo(primTable:Dictionary):void {
 		primTable['lookLike:']				= primShowCostume;
+		primTable['lookLikeString:']		= primShowCostume;	// Game Snap
+		primTable['lookLikeIndex:']			= primShowCostume;	// Game Snap
 		primTable['nextCostume']			= primNextCostume;
+		primTable['previousCostume']		= primPreviousCostume;
 		primTable['costumeIndex']			= primCostumeIndex;
+		primTable['costumeCount']			= primCostumeCount;	// Game Snap
 		primTable['costumeName']			= primCostumeName;
 
 		primTable['showBackground:']		= primShowCostume; // used by Scratch 1.4 and earlier (doesn't start scene hats)
@@ -56,6 +60,7 @@ public class LooksPrims {
 		primTable['say:']							= function(b:*):* { showBubble(b, 'talk') };
 		primTable['think:duration:elapsed:from:']	= function(b:*):* { showBubbleAndWait(b, 'think') };
 		primTable['think:']							= function(b:*):* { showBubble(b, 'think') };
+		primTable['hideBubble']						= primHideBubble;
 
 		primTable['changeGraphicEffect:by:'] = primChangeEffect;
 		primTable['setGraphicEffect:to:']	= primSetEffect;
@@ -89,6 +94,13 @@ public class LooksPrims {
 		if (s != null) s.showCostume(s.currentCostumeIndex + 1);
 		if (s.visible) interp.redraw();
 	}
+	
+	// Game Snap: Switch to the previous costume
+	private function primPreviousCostume(b:Block):void {
+		var s:ScratchObj = interp.targetObj();
+		if (s != null) s.showCostume(s.currentCostumeIndex - 1);
+		if (s.visible) interp.redraw();
+	}
 
 	private function primShowCostume(b:Block):void {
 		var s:ScratchObj = interp.targetObj();
@@ -116,6 +128,12 @@ public class LooksPrims {
 	private function primCostumeIndex(b:Block):Number {
 		var s:ScratchObj = interp.targetObj();
 		return (s == null) ? 1 : s.costumeNumber();
+	}
+	
+	// Game Snap: Get the number of costumes
+	private function primCostumeCount(b:Block):Number {
+		var s:ScratchObj = interp.targetObj();
+		return (s == null) ? 1 : s.costumes.length;
 	}
 
 	private function primCostumeName(b:Block):String {
@@ -180,6 +198,12 @@ public class LooksPrims {
 		s.showBubble(text, type, b);
 		if (s.visible) interp.redraw();
 	}
+	
+	private function primHideBubble(b:Block):void {
+		var s:ScratchSprite = interp.targetSprite();
+		if (s == null) return;
+		s.hideBubble();
+	}
 
 	private function primChangeEffect(b:Block):void {
 		var s:ScratchObj = interp.targetObj();
@@ -242,6 +266,7 @@ public class LooksPrims {
 	private function primShow(b:Block):void {
 		var s:ScratchSprite = interp.targetSprite();
 		if (s == null) return;
+		if(s.isTemplateObj) return;	// For Game Snap template objects
 		s.visible = true;
 		if(!app.isIn3D) s.applyFilters();
 		s.updateBubble();
@@ -251,6 +276,7 @@ public class LooksPrims {
 	private function primHide(b:Block):void {
 		var s:ScratchSprite = interp.targetSprite();
 		if ((s == null) || !s.visible) return;
+		if(s.isTemplateObj) return;	// For Game Snap template objects
 		s.visible = false;
 		if(!app.isIn3D) s.applyFilters();
 		s.updateBubble();

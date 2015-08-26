@@ -21,29 +21,49 @@
 // John Maloney, September 2010
 
 package scratch {
-	import flash.display.*;
-	import flash.events.*;
+	import flash.display.BitmapData;
+	import flash.display.DisplayObject;
+	import flash.display.Sprite;
+	import flash.events.Event;
+	import flash.events.KeyboardEvent;
 	import flash.geom.Rectangle;
-	import flash.media.*;
-	import flash.net.*;
+	import flash.media.Microphone;
+	import flash.media.SoundTransform;
+	import flash.net.FileFilter;
+	import flash.net.FileReference;
 	import flash.system.System;
 	import flash.text.TextField;
-	import flash.utils.*;
+	import flash.utils.ByteArray;
+	import flash.utils.setTimeout;
+	
 	import blocks.Block;
 	import blocks.BlockArg;
-	import interpreter.*;
+	
+	import interpreter.Interpreter;
+	import interpreter.Variable;
+	
 	import primitives.VideoMotionPrims;
+	
 	import sound.ScratchSoundPlayer;
-	import translation.*;
-	import ui.media.MediaInfo;
+	
+	import translation.Translator;
+	
 	import ui.BlockPalette;
+	import ui.media.MediaInfo;
+	
 	import uiwidgets.DialogBox;
-	import util.*;
-	import watchers.*;
+	
+	import util.ObjReader;
+	import util.OldProjectReader;
+	import util.ProjectIO;
+	import util.SimpleFlvWriter;
+	
+	import watchers.ListWatcher;
+	import watchers.Watcher;
 
 public class ScratchRuntime {
 
-	[Embed(source='../assets/newproject.snap', mimeType='application/octet-stream')] protected static var NewProjectData:Class;
+	[Embed(source='../assets/newproject.stack', mimeType='application/octet-stream')] protected static var NewProjectData:Class;
 
 	public var app:Scratch;
 	public var interp:Interpreter;
@@ -59,6 +79,9 @@ public class ScratchRuntime {
 
 	protected var projectToInstall:ScratchStage;
 	protected var saveAfterInstall:Boolean;
+	
+	// For Game Snap
+	public var templateObjLoadArray:Array = [];	// Temporary array to associate template objects with an index
 
 	public function ScratchRuntime(app:Scratch, interp:Interpreter) {
 		this.app = app;
@@ -88,6 +111,9 @@ public class ScratchRuntime {
 		// Step the stage, sprites, and watchers
 		app.stagePane.step(this);
 
+		// For Game Snap step the Design tab watchers
+		Designer.dapp.designTabPart.watcherStep(this);
+		
 		// run scripts and commit any pen strokes
 		processEdgeTriggeredHats();
 		interp.stepThreads();
@@ -181,6 +207,16 @@ public class ScratchRuntime {
 		for each (var stack:Block in clickedObj.scripts) {
 			if (stack.op == 'whenClicked') {
 				interp.restartThread(stack, clickedObj);
+			}
+		}
+		
+		// For Game Snap, handle objects that are derrived from a template
+		if(clickedObj.basedOnTemplateObj != null) {
+			// Use the template sprite's block stack for this sprite
+			for each (stack in clickedObj.basedOnTemplateObj.scripts) {
+				if (stack.op == 'whenClicked') {
+					interp.restartThread(stack, clickedObj);
+				}
 			}
 		}
 	}
@@ -362,33 +398,42 @@ public class ScratchRuntime {
 	public function selectProjectFile():void {
 		// Prompt user for a file name and load that file.
 		var fileName:String, data:ByteArray;
+		var filePath:String;
 		function fileLoadHandler(event:Event):void {
 			var file:FileReference = FileReference(event.target);
 			fileName = file.name;
+			filePath = event.target.nativePath;	// For Game Snap, added filePath storage to fix a Scratch bug of not setting the path on a loaded project
 			data = file.data;
 			if (app.stagePane.isEmpty()) doInstall();
 			else DialogBox.confirm('Replace contents of the current project?', app.stage, doInstall);
 		}
 		function doInstall(ignore:* = null):void {
-			installProjectFromFile(fileName, data);
+			installProjectFromFile(fileName, filePath, data);
 		}
 		stopAll();
-		var filter1:FileFilter = new FileFilter('DevPro Game Snap Project', '*.snap');
-		var filter2:FileFilter = new FileFilter('Scratch 2 Project', '*.sb2');
-		var filter3:FileFilter = new FileFilter('Scratch 1.4 Project', '*.sb');
-		Scratch.loadSingleFile(fileLoadHandler, [filter1, filter2, filter3])
+		var filter1:FileFilter = new FileFilter('DevPro Game Stack Project', '*.stack');
+		var filter2:FileFilter = new FileFilter('Old DevPro Game Snap Project', '*.snap');
+		var filter3:FileFilter = new FileFilter('Scratch 2 Project', '*.sb2');
+		var filter4:FileFilter = new FileFilter('Scratch 1.4 Project', '*.sb');
+		Scratch.loadSingleFile(fileLoadHandler, [filter1, filter2, filter3, filter4])
 	}
 
-	public function installProjectFromFile(fileName:String, data:ByteArray):void {
+	// For Game Snap, added the filePath parameter so we correctly set the project path (bug fix from Scratch)
+	public function installProjectFromFile(fileName:String, filePath:String, data:ByteArray):void {
 		// Install a project from a file with the given name and contents.
 		stopAll();
 		app.oldWebsiteURL = '';
 		app.loadInProgress = true;
-		installProjectFromData(data);
-		app.setProjectName(fileName);
+		
+		// For Game Snap, added this check for load success
+		if(installProjectFromData(data)) {
+			app.setProjectName(fileName);
+			Designer.dapp.setProjectPath(filePath);
+		}
 	}
 
-	public function installProjectFromData(data:ByteArray, saveForRevert:Boolean = true):void {
+	// For Game Snap, changed the return type from void to Boolean so we know when a load has failed
+	public function installProjectFromData(data:ByteArray, saveForRevert:Boolean = true):Boolean {
 		var newProject:ScratchStage;
 		stopAll();
 		data.position = 0;
@@ -397,7 +442,7 @@ public class ScratchRuntime {
 			newProject = new ProjectIO(app).decodeProjectFromZipFile(data);
 			if (!newProject) {
 				projectLoadFailed();
-				return;
+				return false;
 			}
 		} else {
 			var info:Object;
@@ -408,7 +453,7 @@ public class ScratchRuntime {
 			try { objTable = reader.readObjTable() } catch (e:Error) { }
 			if (!objTable) {
 				projectLoadFailed();
-				return;
+				return false;
 			}
 			newProject = new OldProjectReader().extractProject(objTable);
 			newProject.info = info;
@@ -417,6 +462,8 @@ public class ScratchRuntime {
 		if (saveForRevert) app.saveForRevert(data, false);
 		app.extensionManager.clearImportedExtensions();
 		decodeImagesAndInstall(newProject);
+		
+		return true;
 	}
 
 	public function projectLoadFailed(ignore:* = null):void {
@@ -448,7 +495,7 @@ public class ScratchRuntime {
 		app.installStage(project);
 		app.updateSpriteLibrary(true);
 		// set the active sprite
-		var allSprites:Array = app.stagePane.sprites();
+		var allSprites:Array = app.stagePane.regularSprites(); // For Game Snap, only choose from regular, non-template sprites
 		if (allSprites.length > 0) {
 			allSprites = allSprites.sortOn('indexInLibrary');
 			app.selectSprite(allSprites[0]);
@@ -601,6 +648,31 @@ public class ScratchRuntime {
 		}
 		return result;
 	}
+	
+	// For Game Snap
+	public function allLocalVarNames():Array {
+		var result:Array = [], v:Variable;
+		if (!app.viewedObj().isStage) {
+			for each (v in app.viewedObj().variables) result.push(v.name);
+		}
+		return result;
+	}
+	
+	// For Game Snap
+	public function allTemplateVarNames():Array {
+		var result:Array = [], v:Variable;
+		if (app.viewedObj().basedOnTemplateObj && !app.viewedObj().isStage) {
+			for each (v in app.viewedObj().basedOnTemplateObj.variables) result.push(v.name);
+		}
+		return result;
+	}
+
+	// For Game Snap
+	public function allGlobalVarNames():Array {
+		var result:Array = [], v:Variable;
+		for each (v in app.stageObj().variables) result.push(v.name);
+		return result;
+	}
 
 	public function renameVariable(oldName:String, newName:String):void {
 		if (oldName == newName) return;
@@ -614,7 +686,14 @@ public class ScratchRuntime {
 		var v:Variable = owner.lookupVar(oldName);
 		if (v != null) {
 			v.name = newName;
-			if (v.watcher) v.watcher.changeVarName(newName);
+			if (v.watcher) {
+				v.watcher.changeVarName(newName);
+			}
+			
+			// For Game Snap  Design tab
+			if(v.designWatcher) {
+				v.designWatcher.changeVarName(newName);
+			}
 		} else {
 			owner.lookupOrCreateVar(newName);
 		}
@@ -650,6 +729,21 @@ public class ScratchRuntime {
 		return result;
 	}
 
+	// For Game Snap
+	public function allLocalListNames():Array {
+		var result:Array = [];
+		if (!app.viewedObj().isStage) {
+			result = result.concat(app.viewedObj().listNames());
+		}
+		return result;
+	}
+	
+	// For Game Snap
+	public function allGlobalListNames():Array {
+		var result:Array = app.stageObj().listNames();
+		return result;
+	}
+	
 	public function deleteList(listName:String):void {
 		if (app.viewedObj().ownsList(listName)) {
 			app.viewedObj().deleteList(listName);
@@ -881,8 +975,16 @@ public class ScratchRuntime {
 		var stack:Block;
 		for (var i:int = stage.numChildren - 1; i >= 0; i--) {
 			var o:* = stage.getChildAt(i);
-			if (o is ScratchObj) {
-				for each (stack in ScratchObj(o).scripts) f(stack, o);
+			if (o is ScratchObj && !ScratchObj(o).isTemplateObj) {	// For Game Snap, don't include template objects
+				var so:ScratchObj = o as ScratchObj;
+				
+				for each (stack in so.scripts) f(stack, o);
+				
+				// For Game Snap, handle objects that are derrived from a template
+				if(so.basedOnTemplateObj != null) {
+					// Use the template sprite's block stack for this sprite
+					for each (stack in so.basedOnTemplateObj.scripts) f(stack, o);
+				}
 			}
 		}
 		for each (stack in stage.scripts) f(stack, stage);
@@ -982,7 +1084,7 @@ public class ScratchRuntime {
 			if(data.isList)
 				for (i = 0; i < uiLayer.numChildren; i++) {
 					var listW:ListWatcher = uiLayer.getChildAt(i) as ListWatcher;
-					if (listW && (listW.listName == varName) && listW.visible) return true;
+					if (listW && (listW.target == targetObj) && (listW.listName == varName) && listW.visible) return true;	// For Game Snap, added the check against targetObj so we don't match against the same named list on another sprite (bug fix)
 				}
 			else
 				for (i = 0; i < uiLayer.numChildren; i++) {

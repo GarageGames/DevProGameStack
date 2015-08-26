@@ -121,6 +121,7 @@ public class Block extends Sprite {
 
 	// For Game Snap
 	public var isGlobal:Boolean = false;
+	public var fromTemplateObj:Boolean = false;
 	
 	public function Block(spec:String, type:String = " ", color:int = 0xD00000, op:* = 0, defaultArgs:Array = null) {
 		this.spec = Translator.map(spec);

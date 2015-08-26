@@ -367,6 +367,13 @@ public class GestureHandler {
 		for (var i:int = uiLayer.numChildren - 1; i > 0; i--) {
 			var o:DisplayObject = uiLayer.getChildAt(i) as DisplayObject;
 			if (o is Bitmap) break; // hit the paint layer of the stage; no more elments
+			
+			// For Game Snap
+			if((o is ScratchObj) && ScratchObj(o).getPassthroughMouseClicks()) {
+				// Don't touch passthrough objects
+				continue;
+			}
+			
 			if (o.visible && o.hitTestPoint(globalX, globalY, true)) {
 				if(app.isIn3D) app.stagePane.visible = false;
 				return o;
@@ -376,6 +383,13 @@ public class GestureHandler {
 			for (i = app.stagePane.numChildren - 1; i > 0; i--) {
 				o = app.stagePane.getChildAt(i) as DisplayObject;
 				if (o is Bitmap) break; // hit the paint layer of the stage; no more elments
+				
+				// For Game Snap
+				if((o is ScratchObj) && ScratchObj(o).getPassthroughMouseClicks()) {
+					// Don't touch passthrough objects
+					continue;
+				}
+				
 				if (o.visible && o.hitTestPoint(globalX, globalY, true)) {
 					if(app.isIn3D) app.stagePane.visible = false;
 					return o;

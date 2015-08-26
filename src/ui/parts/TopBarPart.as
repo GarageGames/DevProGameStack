@@ -143,9 +143,12 @@ public class TopBarPart extends UIPart {
 	}
 
 	public function refresh():void {
-		if (app.isOffline) {
-			helpTool.visible = app.isOffline;
-		}
+		// For Game Snap, remove the help tool button for now
+		//if (app.isOffline) {
+		//	helpTool.visible = app.isOffline;
+		//}
+		helpTool.visible = false;
+		
 		fixLayout();
 	}
 

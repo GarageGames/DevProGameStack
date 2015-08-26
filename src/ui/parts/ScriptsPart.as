@@ -59,8 +59,12 @@ public class ScriptsPart extends UIPart {
 	private var yLabel:TextField;
 	private var xReadout:TextField;
 	private var yReadout:TextField;
+	private var basedOnLabel:TextField;	// For Game Snap template objects
+	private var basedOnName:TextField;	// For Game Snap template objects
+	private var isTemplateSpriteLabel:TextField; // For Game Snap template objects
 	private var lastX:int = -10000000; // impossible value to force initial update
 	private var lastY:int = -10000000; // impossible value to force initial update
+	private var lastBasedOnName:String;	// For Game Snap template tracking
 
 	// For Game Snap
 	private var showSpriteInfo:Boolean;
@@ -154,6 +158,26 @@ public class ScriptsPart extends UIPart {
 				// This is the original line of code rather than the IF block
 				if (!xyDisplay.visible) xyDisplay.visible = true;
 				if (globalDisplay.visible) globalDisplay.visible = false;	// For Game Snap
+				
+				// For Game Snap template object
+				if(target.isTemplateObj) {
+					if(!isTemplateSpriteLabel.visible) {
+						basedOnLabel.visible = false;
+						basedOnName.visible = false;
+						isTemplateSpriteLabel.visible = true;
+					}
+				}
+				else if(!target.basedOnTemplateObj && (basedOnLabel.visible || isTemplateSpriteLabel.visible)) {
+					basedOnLabel.visible = false;
+					basedOnName.visible = false;
+					isTemplateSpriteLabel.visible = false;
+				}
+				else if(target.basedOnTemplateObj && (!basedOnLabel.visible || isTemplateSpriteLabel.visible)) {
+					basedOnLabel.visible = true;
+					basedOnName.visible = true;
+					isTemplateSpriteLabel.visible = false;
+					recalculateBasedOnNameX();
+				}
 			}
 			else
 			{
@@ -170,6 +194,18 @@ public class ScriptsPart extends UIPart {
 			if (spr.scratchY != lastY) {
 				lastY = spr.scratchY;
 				yReadout.text = String(lastY);
+			}
+			
+			// For Game Snap template object
+			if(!spr.basedOnTemplateObj && lastBasedOnName != "None") {
+				lastBasedOnName = "None";
+				basedOnName.text = lastBasedOnName;
+				recalculateBasedOnNameX();
+			}
+			else if(spr.basedOnTemplateObj && lastBasedOnName != spr.objName) {
+				lastBasedOnName = spr.basedOnTemplateObj.objName;
+				basedOnName.text = lastBasedOnName;
+				recalculateBasedOnNameX();
 			}
 		}
 		updateExtensionIndicators();
@@ -204,7 +240,7 @@ public class ScriptsPart extends UIPart {
 		scriptsFrame.setWidthHeight(w - scriptsFrame.x - 5, h - scriptsFrame.y - 5);
 		spriteWatermark.x = w - 60;
 		spriteWatermark.y = scriptsFrame.y + 10;
-		xyDisplay.x = spriteWatermark.x + 1;
+		xyDisplay.x = spriteWatermark.x - 14;	// Original code that was changed for Game Snap: spriteWatermark.x + 1;
 		xyDisplay.y = spriteWatermark.y + 43;
 		zoomWidget.x = w - zoomWidget.width - 15;
 		zoomWidget.y = h - zoomWidget.height - 15;
@@ -212,8 +248,22 @@ public class ScriptsPart extends UIPart {
 		// For Game Snap
 		globalDisplay.x = w - 90;
 		globalDisplay.y = scriptsFrame.y + 10;
+		recalculateBasedOnNameX();
 	}
 
+	// For Game Snap
+	private function recalculateBasedOnNameX():void {
+		var nameX:Number = 70 - basedOnName.width;
+		if(nameX >= 0) {
+			nameX /= 2;
+		}
+		else {
+			nameX = (basedOnName.width - 70) * -1;
+		}
+		
+		basedOnName.x = nameX;
+	}
+	
 	private function redraw():void {
 		var paletteW:int = paletteFrame.visibleW();
 		var paletteH:int = paletteFrame.visibleH();
@@ -246,10 +296,16 @@ public class ScriptsPart extends UIPart {
 
 	private function addXYDisplay():void {
 		xyDisplay = new Sprite();
-		xyDisplay.addChild(xLabel = makeLabel('x:', readoutLabelFormat, 0, 0));
-		xyDisplay.addChild(xReadout = makeLabel('-888', readoutFormat, 15, 0));
-		xyDisplay.addChild(yLabel = makeLabel('y:', readoutLabelFormat, 0, 13));
-		xyDisplay.addChild(yReadout = makeLabel('-888', readoutFormat, 15, 13));
+		xyDisplay.addChild(xLabel = makeLabel('x:', readoutLabelFormat, 15, 0));
+		xyDisplay.addChild(xReadout = makeLabel('-888', readoutFormat, 30, 0));
+		xyDisplay.addChild(yLabel = makeLabel('y:', readoutLabelFormat, 15, 13));
+		xyDisplay.addChild(yReadout = makeLabel('-888', readoutFormat, 30, 13));
+		
+		// For Game Snap template objects
+		xyDisplay.addChild(basedOnLabel = makeLabel('based on:', readoutLabelFormat, 5, 28));
+		xyDisplay.addChild(basedOnName = makeLabel('None', readoutFormat, 0, 41));
+		xyDisplay.addChild(isTemplateSpriteLabel = makeLabel('template', readoutLabelFormat, 10, 28));
+		
 		addChild(xyDisplay);
 	}
 

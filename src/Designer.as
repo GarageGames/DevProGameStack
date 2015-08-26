@@ -18,6 +18,7 @@ package {
 	
 	import scratch.ScratchObj;
 	
+	import ui.parts.DesignTabPart;
 	import ui.parts.GlobalTabPart;
 	
 	import uiwidgets.DialogBox;
@@ -31,6 +32,7 @@ public class Designer extends Scratch {
 	protected var lastViewedObject:ScratchObj = null;
 	
 	protected var globalTabPart:GlobalTabPart;
+	public var designTabPart:DesignTabPart;
 
 	protected var displayFPSCounter:Boolean = false;	// Tracks displaying the FPS counter
 	
@@ -69,7 +71,7 @@ public class Designer extends Scratch {
 			debugTextBox.text = text;
 		}
 	}
-	
+
 	override protected function addFileMenuItems(b:*, m:Menu):void {
 		m.addItem('Open', runtime.selectProjectFile);
 		m.addItem('Save', exportProjectToFile);
@@ -110,13 +112,16 @@ public class Designer extends Scratch {
 		m.addLine();
 		m.addItem('Edit block colors', editBlockColors);
 
+		m.addLine();
+		m.addItem('Toggle Template Sprites Tab', toggleTemplateSpritesTab);
+		m.addItem('Toggle Global Tab', toggleGlobalTab);
+		m.addItem('Toggle Access Data By Strings blocks', toggleAccessDataByStrings);
+		
 		if (b.lastEvent.shiftKey) {
 			m.addLine();
 			m.addItem('Toggle FPS Counter', toggleFPSCounter);
 
 			m.addItem('Toggle Focus Area blocks', toggleFocusAreaBlocks);
-			
-			m.addItem('Toggle Global Tab', toggleGlobalTab);
 		}
 	}
 
@@ -140,14 +145,28 @@ public class Designer extends Scratch {
 		Scratch.app.translationChanged();
 	}
 	
+	protected function toggleAccessDataByStrings():void {
+		if (app.showDataByStringBlocks) {
+			app.showDataByStringBlocks = false;
+		} else {
+			app.showDataByStringBlocks = true;
+		}
+		
+		Scratch.app.translationChanged();
+	}
+	
 	protected function toggleGlobalTab():void {
 		tabsPart.toggleGlobalTab();
+	}
+	
+	protected function toggleTemplateSpritesTab():void {
+		libraryPart.toggleSpriteTemplateTabs();
 	}
 
 	override public function showAboutMenu(b:*):void {
 		// Just display a dialog
 		DialogBox.notify(
-			'DevPro Game Snap v0.0.3',
+			'DevPro Game Stack v0.8.0',
 			'\nCopyright © 2015 GarageGames LLC' +
 			'\n\nBased on Scratch from the MIT Media Laboratory' +
 			'\nunder the GPL 2 license.', stage);
@@ -182,6 +201,40 @@ public class Designer extends Scratch {
 
 	override protected function exportProjectToFile(fromJS:Boolean = false):void {
 		function squeakSoundsConverted():void {
+			// For Game Snap
+			function saveZipData(event:Event):void {
+				var ext:String = '.stack';
+				
+				//var newFile:File = event.target as File;
+				var tempArray:Array = File(event.target).nativePath.split(File.separator);
+				var fileName:String = tempArray.pop(); // Remove last array item, which should be the file name
+				if(fileName.lastIndexOf(ext) == -1) {
+					fileName += ext;
+				}
+				
+				// Add back the file name
+				tempArray.push(fileName);
+				
+				// Write!
+				var fs:FileStream = new FileStream();
+				var newFile:File = new File(tempArray.join(File.separator));
+				fs.open(newFile, FileMode.WRITE);
+				fs.writeBytes(zipData);
+				fs.close();
+				
+				if (!fromJS) setProjectName(fileName);
+				
+				// Store the project's path
+				setProjectPath(event.target.nativePath);
+
+				clearSaveNeeded();
+				
+				if(postExportAction != null) {
+					postExportAction();
+					postExportAction = null;
+				}
+			}
+			
 			// Make sure everything is saved
 			scriptsPane.saveScripts(false);
 			
@@ -189,7 +242,7 @@ public class Designer extends Scratch {
 			var projName:String = projectName();
 			projName = projName.replace(/^\s+|\s+$/g, ''); // Remove whitespace
 			//var defaultName:String = (projName.length > 0) ? projName + '.sb2' : 'project.sb2';
-			var defaultName:String = (projName.length > 0) ? projName + '.snap' : 'project.snap';
+			var defaultName:String = (projName.length > 0) ? projName + '.stack' : 'project.stack';
 			
 			// Get the project's binary file
 			var zipData:ByteArray = projIO.encodeProjectAsZipFile(stagePane);
@@ -215,11 +268,15 @@ public class Designer extends Scratch {
 				//showDebugDialog("exportProjectToFile", "Save File path: " + getProjectPath());
 			} else {
 				// Need to ask for a filename and path
-				var file:File = new File();
-				file.addEventListener(Event.COMPLETE, fileSaved);
-				file.addEventListener(Event.CANCEL, fileError);
-				file.addEventListener(flash.events.IOErrorEvent.IO_ERROR, fileError);
-				file.save(zipData, fixFileName(defaultName));
+				//var file:File = new File();
+				//file.addEventListener(Event.COMPLETE, fileSaved);
+				//file.addEventListener(Event.CANCEL, fileError);
+				//file.addEventListener(flash.events.IOErrorEvent.IO_ERROR, fileError);
+				//file.save(zipData, fixFileName(defaultName));
+				var file:File = File.applicationStorageDirectory;
+				file = file.resolvePath(fixFileName(defaultName));
+				file.addEventListener(Event.SELECT, saveZipData);
+				file.browseForSave("Save As");
 			}
 		}
 		function fileSaved(e:Event):void {
@@ -282,6 +339,7 @@ public class Designer extends Scratch {
 		super.addParts();
 		
 		//globalTabPart = new GlobalTabPart(this);
+		designTabPart = new DesignTabPart(this);
 		
 	}
 	
@@ -327,6 +385,9 @@ public class Designer extends Scratch {
 		} else if (tabName == 'sounds') {
 			soundsPart.refresh();
 			show(soundsPart);
+		} else if (tabName == 'design') {
+			//designTabPart.refresh();
+			show(designTabPart);
 		} else if (tabName == 'global') {
 			scriptsPart.setGlobalTab(true);
 			
@@ -365,6 +426,14 @@ public class Designer extends Scratch {
 		tabsPart.selectTab(tabName);
 		lastTab = tabName;
 		if (saveNeeded) setSaveNeeded(true); // save project when switching tabs, if needed (but NOT while loading!)
+	}
+
+	
+	override protected function updateContentArea(contentX:int, contentY:int, contentW:int, contentH:int, fullH:int):void {
+		super.updateContentArea(contentX, contentY, contentW, contentH, fullH);
+		designTabPart.x = contentX;
+		designTabPart.y = contentY;
+		designTabPart.setWidthHeight(contentW, contentH);
 	}
 
 	// Get the project's native file path (including file name)
@@ -425,10 +494,12 @@ public class Designer extends Scratch {
 	// arguments and the current application path.
 	private function onAppInvoke( event:InvokeEvent ):void {
 		var fileName:String, data:ByteArray;
-		function projectLoadComplete(event:Event):void {
+		var filePath:String;
+		function projectLoadComplete(fevent:Event):void {
 			// File has been loaded and we have the data
 			data = invokedFile.data;
-			runtime.installProjectFromFile(fileName, data);
+			filePath = fevent.target.nativePath;
+			runtime.installProjectFromFile(fileName, filePath, data);
 			invokedFile = null;
 		}
 		function projectLoadError(event:Event):void {
@@ -447,7 +518,7 @@ public class Designer extends Scratch {
 			invokedFile = dir.resolvePath(event.arguments[0]);
 			var extension:String = invokedFile.extension;
 			
-			if(extension == 'snap' || extension == 'sb2' || extension == 'sb') {
+			if(extension == 'stack' || extension == 'snap' || extension == 'sb2' || extension == 'sb') {
 				fileName = invokedFile.name;
 				
 				// We need to load in the file to retrieve its data

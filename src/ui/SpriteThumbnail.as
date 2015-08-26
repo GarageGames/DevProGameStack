@@ -263,12 +263,17 @@ public class SpriteThumbnail extends Sprite {
 		if (targetObj.isStage) return null;
 		var t:ScratchSprite = targetObj as ScratchSprite;
 		var m:Menu = t.menu(evt); // basic sprite menu
-		m.addLine();
-		if (t.visible) {
-			m.addItem('hide', hideInScene);
-		} else {
-			m.addItem('show', showInScene);
+		
+		// For Game Snap, only show these items if the sprite is not a template
+		if(!t.isTemplateObj) {
+			m.addLine();
+			if (t.visible) {
+				m.addItem('hide', hideInScene);
+			} else {
+				m.addItem('show', showInScene);
+			}
 		}
+
 		return m;
 	}
 

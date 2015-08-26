@@ -30,20 +30,33 @@ John:
 */
 
 package svgeditor {
-	import flash.display.*;
-	import flash.events.*;
-	import flash.geom.*;
-
+	import flash.display.BitmapData;
+	import flash.display.DisplayObject;
+	import flash.display.Sprite;
+	import flash.display.StageQuality;
+	import flash.events.Event;
+	import flash.geom.Matrix;
+	import flash.geom.Point;
+	import flash.geom.Rectangle;
+	
 	import scratch.ScratchCostume;
-
-	import svgeditor.objs.*;
-	import svgeditor.tools.*;
-
+	
+	import svgeditor.objs.ISVGEditable;
+	import svgeditor.objs.SVGBitmap;
+	import svgeditor.objs.SVGShape;
+	import svgeditor.objs.SVGTextField;
+	import svgeditor.tools.BitmapPencilTool;
+	import svgeditor.tools.ObjectTransformer;
+	import svgeditor.tools.SVGEditTool;
+	import svgeditor.tools.TextTool;
+	
 	import svgutils.SVGElement;
-
-	import ui.parts.*;
-
-	import uiwidgets.*;
+	
+	import ui.parts.ImagesPart;
+	import ui.parts.SoundsPart;
+	
+	import uiwidgets.IconButton;
+	import uiwidgets.SimpleTooltips;
 
 public class BitmapEdit extends ImageEdit {
 
@@ -62,6 +75,10 @@ public class BitmapEdit extends ImageEdit {
 
 	private var offscreenBM:BitmapData;
 
+	// For Game Snap: This is used to stop the saving of a costume while in the middle of
+	// loading a costume.
+	private var loadCostumeGuard:Boolean = false;
+	
 	public function BitmapEdit(app:Scratch, imagesPart:ImagesPart) {
 		super(app, imagesPart);
 		addStampTool();
@@ -164,8 +181,31 @@ public class BitmapEdit extends ImageEdit {
 		var bm:BitmapData = workArea.getBitmap().bitmapData;
 		bm.fillRect(bm.rect, bgColor()); // clear
 
+		// For Game Snap: There is a problem in calling c.bitmapForEditor() just below in that it triggers
+		// an application OnResize event.  This then causes a blank workArea bitmap to be treated as this
+		// costume's bitmap, and ends up reseting this costume's rotation center to a value of (0,0).
+		// We store the current rotation center here and restore it following the call to c.bitmapForEditor()
+		// to prevent this issue as we cannot prevent the OnResize from happening (has to do with changing
+		// the stage quality setting in c.bitmapForEditor()).
+		var rotationCenterX:int = c.rotationCenterX;
+		var rotationCenterY:int = c.rotationCenterY;
+		
+		// For Game Snap: Calling c.bitmapForEditor() causes an OnResize event as described above, which then
+		// triggers a saveToCostume() call.  If the costume is saved while in the middle of loading, we
+		// can end up saving a blank bitmap for the costume.  This guard is checked by saveToCostume()
+		// so it knows not to process the current costume.
+		loadCostumeGuard = true;
+		
 		var scale:Number = 2 / c.bitmapResolution;
 		var costumeBM:BitmapData = c.bitmapForEditor(isScene);
+		
+		// For Game Snap
+		loadCostumeGuard = false;
+		
+		// For Game Snap: Restore the proper rotation center here in case it changed (see above comment).
+		c.rotationCenterX = rotationCenterX;
+		c.rotationCenterY = rotationCenterY;
+		
 		var destP:Point = isScene ?
 			new Point(0, 0) :
 			new Point(480 - (scale * c.rotationCenterX), 360 - (scale * c.rotationCenterY));
@@ -196,6 +236,11 @@ public class BitmapEdit extends ImageEdit {
 	}
 
 	private function saveToCostume():void {
+		// For Game Snap: See notes in loadCostume() for why this is needed.
+		if(loadCostumeGuard) {
+			return;
+		}
+		
 		// Note: Although the bitmap is double resolution, the rotation center is not doubled,
 		// since it is applied to the costume after the bitmap has been scaled down.
 		var c:ScratchCostume = targetCostume;

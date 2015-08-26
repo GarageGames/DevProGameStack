@@ -70,6 +70,11 @@ public class ScratchObj extends Sprite {
 
 	// For Game Snap
 	public var isGlobalObj:Boolean = false;
+	public var isTemplateObj:Boolean = false;
+	public var templateObjIndex:int = -1;	// Index referenced during loading and saving only
+	public var basedOnTemplateObj:ScratchObj = null;
+	public var lockedObj:Boolean = false;	// Indicates that this object is locked and cannot be dragged
+	protected var passthroughMouseClicks:Boolean = false;	// Indicates that this object passes through mouse clicks
 	
 	public var img:Sprite; // holds a bitmap or svg object, after applying image filters, scale, and rotation
 	private var lastCostume:ScratchCostume;
@@ -88,6 +93,30 @@ public class ScratchObj extends Sprite {
 
 	public function allObjects():Array { return [this] }
 
+	// For Game Snap
+	public function setupAsTemplateObj():void {
+		isTemplateObj = true;
+		visible = false;
+	}
+	
+	// For Game Snap
+	public function getPassthroughMouseClicks():Boolean {
+		return passthroughMouseClicks;
+	}
+	
+	// For Game Snap
+	public function setPassthroughMouseClicks(value:Boolean):void {
+		passthroughMouseClicks = value;
+		if(passthroughMouseClicks) {
+			mouseChildren = false;
+			mouseEnabled = false;
+		}
+		else {
+			mouseChildren = true;
+			mouseEnabled = true;
+		}
+	}
+	
 	public function deleteCostume(c:ScratchCostume):void {
 		if (costumes.length < 2) return; // a sprite must have at least one costume
 		var i:int = costumes.indexOf(c);
@@ -330,6 +359,10 @@ public class ScratchObj extends Sprite {
 		if ((['playSound:', 'doPlaySoundAndWait'].indexOf(op)) > -1) {
 			return (sounds.length > 0) ? [sounds[sounds.length - 1].soundName] : [''];
 		}
+		// For Game Snap
+		if ((['playSoundString:', 'doPlaySoundStringAndWait'].indexOf(op)) > -1) {
+			return (sounds.length > 0) ? [sounds[sounds.length - 1].soundName] : [''];
+		}
 		if ('createCloneOf' == op) {
 			if (!isStage) return ['_myself_'];
 			sprites = Scratch.app.stagePane.sprites();
@@ -344,6 +377,7 @@ public class ScratchObj extends Sprite {
 		if ('changeVar:by:' == op) return [defaultVarName(), 1];
 		if ('showVariable:' == op) return [defaultVarName()];
 		if ('hideVariable:' == op) return [defaultVarName()];
+		if ('readVariableString:' == op) return [defaultVarName()];	// For Game Snap
 
 		if ('append:toList:' == op) return ['thing', defaultListName()];
 		if ('deleteLine:ofList:' == op) return [1, defaultListName()];
@@ -360,11 +394,13 @@ public class ScratchObj extends Sprite {
 
 	public function defaultVarName():String {
 		if (variables.length > 0) return variables[variables.length - 1].name; // local var
+		if (basedOnTemplateObj != null && basedOnTemplateObj.variables.length > 0) return basedOnTemplateObj.variables[basedOnTemplateObj.variables.length - 1].name; // For Game Snap: template variable
 		return isStage ? '' : Scratch.app.stagePane.defaultVarName(); // global var, if any
 	}
 
 	public function defaultListName():String {
 		if (lists.length > 0) return lists[lists.length - 1].listName; // local list
+		if (basedOnTemplateObj != null && basedOnTemplateObj.lists.length > 0) return basedOnTemplateObj.lists[basedOnTemplateObj.lists.length - 1].listName; // For Game Snap: template list
 		return isStage ? '' : Scratch.app.stagePane.defaultListName(); // global list, if any
 	}
 
@@ -486,6 +522,12 @@ public class ScratchObj extends Sprite {
 					v.watcher.parent.removeChild(v.watcher);
 				}
 				v.watcher = v.value = null;
+				
+				// For Game Snap Design tab
+				if((v.designWatcher != null) && (v.designWatcher.parent != null)) {
+					v.designWatcher.parent.removeChild(v.designWatcher);
+				}
+				v.designWatcher = null;
 			}
 			else newVars.push(v);
 		}
@@ -607,9 +649,23 @@ public class ScratchObj extends Sprite {
 		
 		// For Game Snap
 		json.writeKeyValue('isGlobal', isGlobalObj);
+		json.writeKeyValue('isTemplate', isTemplateObj);
+		if(isTemplateObj) {
+			json.writeKeyValue('templateObjIndex', templateObjIndex);
+		}
+		if(basedOnTemplateObj) {
+			json.writeKeyValue('templateObjIndex', basedOnTemplateObj.templateObjIndex);
+		}
+		json.writeKeyValue('lockedObj', lockedObj);
+		json.writeKeyValue('passthroughMouseClicks', getPassthroughMouseClicks());
 	}
 
 	public function readJSON(jsonObj:Object):void {
+		// For Game Snap, associate with a possible template sprite
+		if(jsonObj.hasOwnProperty('templateObjIndex') && jsonObj.templateObjIndex >= 0 && jsonObj.templateObjIndex < Scratch.app.runtime.templateObjLoadArray.length) {
+			basedOnTemplateObj = Scratch.app.runtime.templateObjLoadArray[jsonObj.templateObjIndex];
+		}
+			
 		objName = jsonObj.objName;
 		variables = jsonObj.variables || [];
 		for (var i:int = 0; i < variables.length; i++) {
@@ -626,6 +682,12 @@ public class ScratchObj extends Sprite {
 		
 		// For Game Snap
 		isGlobalObj = jsonObj.isGlobal;
+		isTemplateObj = jsonObj.isTemplate;
+		if(isTemplateObj) {
+			templateObjIndex = jsonObj.templateObjIndex;
+		}
+		lockedObj = jsonObj.lockedObj;
+		setPassthroughMouseClicks(jsonObj.passthroughMouseClicks);
 	}
 
 	private function isNaNOrInfinity(n:Number):Boolean {

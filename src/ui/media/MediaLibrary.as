@@ -18,19 +18,45 @@
  */
 
 package ui.media {
-import flash.display.*;
-import flash.events.*;
+import flash.display.BitmapData;
+import flash.display.Graphics;
+import flash.display.Loader;
+import flash.display.Shape;
+import flash.display.Sprite;
+import flash.events.Event;
+import flash.events.IOErrorEvent;
 import flash.media.Sound;
-import flash.net.*;
-import flash.text.*;
-import flash.utils.*;
+import flash.net.FileReference;
+import flash.net.FileReferenceList;
+import flash.text.TextField;
+import flash.text.TextFormat;
+import flash.utils.ByteArray;
+import flash.utils.setTimeout;
+
 import assets.Resources;
+
 import extensions.ScratchExtension;
-import scratch.*;
+
+import scratch.ScratchCostume;
+import scratch.ScratchSound;
+import scratch.ScratchSprite;
+import scratch.ScratchStage;
+
 import sound.mp3.MP3Loader;
+
 import translation.Translator;
-import uiwidgets.*;
-import util.*;
+
+import uiwidgets.Button;
+import uiwidgets.DialogBox;
+import uiwidgets.IconButton;
+import uiwidgets.ScrollFrame;
+import uiwidgets.ScrollFrameContents;
+
+import util.GIFDecoder;
+import util.JSON;
+import util.ObjReader;
+import util.OldProjectReader;
+import util.ProjectIO;
 
 public class MediaLibrary extends Sprite {
 
@@ -516,8 +542,12 @@ spriteFeaturesFilter.visible = false; // disable features filter for now
 		function decodeError():void {
 			DialogBox.notify('Error decoding image', 'Sorry, Scratch was unable to load the image '+fName+'.', Scratch.app.stage);
 		}
-		function spriteError():void {
-			DialogBox.notify('Error decoding sprite', 'Sorry, Scratch was unable to load the sprite '+fName+'.', Scratch.app.stage);
+		function spriteError(reason:String = null):void {
+			var msg:String = 'Sorry, Scratch was unable to load the sprite '+fName+'.';
+			if(reason && reason.length > 0) {
+				msg += ' [' + reason + ']';
+			}
+			DialogBox.notify('Error decoding sprite', msg, Scratch.app.stage);
 		}
 		var costumeOrSprite:*;
 		var fExt:String = '';

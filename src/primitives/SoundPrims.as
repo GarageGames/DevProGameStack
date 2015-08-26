@@ -42,6 +42,10 @@ public class SoundPrims {
 	public function addPrimsTo(primTable:Dictionary):void {
 		primTable["playSound:"]			= primPlaySound;
 		primTable["doPlaySoundAndWait"]	= primPlaySoundUntilDone;
+		primTable["playSoundString:"]			= primPlaySound;			// For Game Snap
+		primTable["doPlaySoundStringAndWait:"]	= primPlaySoundUntilDone;	// For Game Snap
+		primTable["playStageSoundString:"]			= primPlayStageSound;			// For Game Snap
+		primTable["doPlayStageSoundStringAndWait:"]	= primPlayStageSoundUntilDone;	// For Game Snap
 		primTable["stopAllSounds"]		= function(b:*):* { ScratchSoundPlayer.stopAllSounds() };
 
 		primTable["drum:duration:elapsed:from:"]	= primPlayDrum; // Scratch 1.4 drum numbers
@@ -76,6 +80,30 @@ public class SoundPrims {
 		var activeThread:Thread = interp.activeThread;
 		if (activeThread.firstTime) {
 			var snd:ScratchSound = interp.targetObj().findSound(interp.arg(b, 0));
+			if (snd == null) return;
+			activeThread.tmpObj = playSound(snd, interp.targetObj());
+			activeThread.firstTime = false;
+		}
+		var player:ScratchSoundPlayer = ScratchSoundPlayer(activeThread.tmpObj);
+		if ((player == null) || (player.atEnd())) { // finished playing
+			activeThread.tmp = 0;
+			activeThread.firstTime = true;
+		} else {
+			interp.doYield();
+		}
+	}
+	
+	// Game Snap: Play a named sound from the stage on the given sprite (targetObj())
+	private function primPlayStageSound(b:Block):void {
+		var snd:ScratchSound = app.stagePane.findSound(interp.arg(b, 0));
+		if (snd != null) playSound(snd, interp.targetObj());
+	}
+	
+	// Game Snap: Play a named sound from the stage on the given sprite (targetObj()) until complete
+	private function primPlayStageSoundUntilDone(b:Block):void {
+		var activeThread:Thread = interp.activeThread;
+		if (activeThread.firstTime) {
+			var snd:ScratchSound = app.stagePane.findSound(interp.arg(b, 0));
 			if (snd == null) return;
 			activeThread.tmpObj = playSound(snd, interp.targetObj());
 			activeThread.firstTime = false;
