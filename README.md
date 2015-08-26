@@ -1,5 +1,5 @@
 ## DevPro Game Stack
-Copyright 2015 GarageGames LLC
+Copyright 2015 GarageGames LLC  
 Based on Scratch from the MIT Media Laboratory under the GPL 2 license.
 
 ### About
